@@ -36,9 +36,9 @@ export class Snowfall {
     const position = new Float32Array(count * 3), motion = new Float32Array(count * 4), look = new Float32Array(count * 2);
     for (let i = 0; i < count; i++) {
       const depth = random(), sway = .1 + .25 * random();
-      // x, start height (fraction of the fall), z — the sway never brings a flake nearer than nearZ
+      // x, start height (fraction of the fall), z; the sway never brings a flake nearer than nearZ
       position.set([(random() * 2 - 1) * v.halfWidth, random(), THREE.MathUtils.lerp(v.farZ, v.nearZ - v.swayZ, depth)], i * 3);
-      // cycles per loop: fall .55–1 units/s, sway period 4–9 s, sway phase, sway width
+      // cycles per loop: fall .55-1 units/s, sway period 4-9 s, sway phase, sway width
       motion.set([Math.max(1, Math.round((.55 + .45 * random()) * SNOW_LOOP_SECONDS / v.height)), Math.round(SNOW_LOOP_SECONDS / (4 + 5 * random())), random(), sway], i * 4);
       // world diameter, opacity (farther flakes fainter)
       look.set([.025 + .035 * random(), (.35 + .4 * random()) * (.65 + .35 * depth)], i * 2);
@@ -75,7 +75,7 @@ export class Snowfall {
         void main(){
           vec2 c = gl_PointCoord * 2. - 1.;
           float soft = max(0., 1. - dot(c, c));
-          float d = mix(soft * soft, smoothstep(1., .45, length(c)), painted);
+          float d = mix(soft * soft, 1. - smoothstep(.45, 1., length(c)), painted);
           gl_FragColor = vec4(flakeColor, flakeAlpha * d);
           #include <colorspace_fragment>
         }`,
@@ -89,7 +89,7 @@ export class Snowfall {
       const seconds = performance.now() / 1000;
       if (this.lastSeconds >= 0) this.phase = (this.phase + Math.min(1, seconds - this.lastSeconds) * Math.max(0, this.cfg.speed) / SNOW_LOOP_SECONDS) % 1;
       this.lastSeconds = seconds;
-      // Current target: the canvas, or the oil filter's source buffer — same pixel size either way.
+      // Current target: the canvas, or the oil filter's source buffer; same pixel size either way.
       renderer.getCurrentViewport(this.viewport);
       const u = material.uniforms;
       u.phase.value = this.phase;
