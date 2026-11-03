@@ -87,6 +87,7 @@ export class OilStrokeFilter {
     private bgImage: () => THREE.Texture | null,
     private edge: { lo: number; hi: number },
     private frontImage: () => THREE.Texture | null = () => null,
+    private beforeSource: () => void = () => {},
   ) {
     this.gl = renderer.getContext() as WebGL2RenderingContext;
     const gl = this.gl;
@@ -136,6 +137,8 @@ export class OilStrokeFilter {
     const { w, h } = fitSize(cw, ch, short);
     const key = `${w}x${h}|${c.strength}|${c.size}|${c.boil}|${c.fps}|${c.grade}`;
     if (!this.cadence.take(now, c.fps, `${cw}x${ch}|${key}|${c.split}`, c.split)) return;
+    // Keep interpolation continuous, but evaluate geometry only for visible frames.
+    this.beforeSource();
     // 1) 장면 → HalfFloat
     if (this.rt.width !== cw || this.rt.height !== ch) this.rt.setSize(cw, ch);
     r.setRenderTarget(this.rt);

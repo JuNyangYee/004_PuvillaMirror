@@ -145,6 +145,7 @@ async function main(): Promise<void> {
     }
   }
   scene.characterOutput.add(character.root);
+  scene.beforeRender = () => character.prepareRender?.();
   if (forceWave > 0 && character instanceof PuuvillaCharacter) character.debugWave = Math.min(1, forceWave);
   // 주소 ?quality=max / ?quality=0~5 → 품질 단계 고정, 자동 하향 끔
   const qp = qualityParam();
@@ -246,7 +247,7 @@ async function main(): Promise<void> {
 
     const params = snap.state === "MIMIC" || snap.state === "ENTER" ? mapSignal(sig, cfg.mapping) : NEUTRAL_PARAMS;
     character.setState(snap);
-    character.apply(params, dt, now / 1000, body);
+    character.apply(params, dt, now / 1000, body, true);
     scene.render();
     scene.ready = true;
 

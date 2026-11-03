@@ -11,7 +11,9 @@ import type { BodyPose } from "../body";
 export interface CharacterRig {
   readonly root: THREE.Object3D;
   /** body: 상반신 신호(없으면 null). 프록시는 무시한다 */
-  apply(p: CharacterParams, dtSec: number, timeSec: number, body?: BodyPose | null): void;
+  apply(p: CharacterParams, dtSec: number, timeSec: number, body?: BodyPose | null, deferSurface?: boolean): void;
+  /** Evaluate display geometry immediately before a frame is drawn. */
+  prepareRender?(): void;
   setState(s: StateSnapshot): void;
 }
 

@@ -30,6 +30,9 @@ export class Scene {
     this.resize();
   }
 
+  /** Called only when the source scene is actually rendered. */
+  beforeRender: (() => void) | null = null;
+
   private paint: PaintFilter | null = null;
   private oil: OilStrokeFilter | null = null;
   /** 그림 배경 (겨울 마을) — 그림 필터가 그 위에 캐릭터를 합성 */
@@ -174,11 +177,13 @@ export class Scene {
         () => this.backdrop?.texture ?? null,
         { lo: this.filterCfg.edgeLo, hi: this.filterCfg.edgeHi },
         () => this.backdrop?.frontTexture() ?? null,
+        () => this.beforeRender?.(),
       );
       this.oil.render();
       return;
     }
     this.oil?.hide();
+    this.beforeRender?.();
     this.backdrop?.setFrontBaked(false);
     if (this.filterCfg?.enabled) {
       this.paint ??= new PaintFilter(this.renderer, this.scene, this.camera, this.filterCfg, { top: this.cfg.bgTop, bottom: this.cfg.bgBottom }, () =>

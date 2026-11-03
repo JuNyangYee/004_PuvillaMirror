@@ -4,6 +4,7 @@ import * as THREE from "three";
 import type { Config } from "./config";
 import { log } from "./logger";
 import { FaceRecovery, type FaceHint } from "./faceRecovery";
+import { WorkerInferenceHealth } from "./workerHealth";
 
 /** 한 얼굴에서 뽑은 raw 신호 (스무딩 전) */
 export interface RawFace {
@@ -47,8 +48,9 @@ export class FaceTracker {
   /** 워커 모드: 추론이 렌더 스레드를 막지 않음 (다른 코어에서 병렬) */
   private worker: Worker | null = null;
   private busy = false;
-  private workerReadyAt = 0;
-  private resultTimes: number[] = [];
+  private workerHealth = new WorkerInferenceHealth();
+  private lastUpdateAt = -Infinity;
+  private closed = false;
   private falling = false;
   private inputEpoch = 0;
   private recovery = new FaceRecovery();
@@ -76,7 +78,7 @@ export class FaceTracker {
     const fileset = await visionFileset(this.cfg.wasmPath, (w) => FilesetResolver.forVisionTasks(w));
     const modelAssetPath = await this.resolveModelPath();
     this.modelSource = modelAssetPath;
-    this.landmarker = await FaceLandmarker.createFromOptions(fileset, {
+    const landmarker = await FaceLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath, delegate: this.cfg.delegate },
       runningMode: "VIDEO",
       numFaces: this.cfg.numFaces,
@@ -86,6 +88,8 @@ export class FaceTracker {
       outputFaceBlendshapes: true,
       outputFacialTransformationMatrixes: true,
     });
+    if (this.closed) { landmarker.close(); return; }
+    this.landmarker = landmarker;
     log.info("tracker", `FaceLandmarker ready delegate=${this.cfg.delegate} model=${modelAssetPath}`);
     this.mode = `main-${this.cfg.delegate}`;
   }
@@ -128,32 +132,35 @@ export class FaceTracker {
       });
     });
     this.modelSource = modelPath;
-    this.workerReadyAt = performance.now();
+    this.workerHealth.reset(performance.now());
     w.onmessage = (ev: MessageEvent) => {
       const d = ev.data;
-      if (d.type !== "result") return;
+      if (this.worker !== w || d.type !== "result") return;
       this.busy = false;
       if (d.epoch !== this.inputEpoch) return;
-      this.resultTimes.push(performance.now());
-      if (d.faces) this.lastResult = { faces: d.faces as RawFace[], inferenceMs: d.inferenceMs, observedAtMs: d.ts };
+      if (d.faces) {
+        this.lastResult = { faces: d.faces as RawFace[], inferenceMs: d.inferenceMs, observedAtMs: d.ts };
+        const now = performance.now();
+        if (typeof document !== "undefined" && document.hidden) this.workerHealth.reset(now);
+        else if (this.workerHealth.observe(d.inferenceMs, now))
+          this.fallBackToMain("워커의 실제 추론 시간이 지속적으로 125ms를 초과");
+      }
+    };
+    w.onerror = ev => {
+      if (this.worker === w) this.fallBackToMain("워커 오류: " + ev.message);
     };
   }
 
-  /**
-   * 워커 추론이 너무 느리면(일부 안드로이드: 워커 안 WebGL 이 소프트웨어로 떨어져 초당 1~2회) 메인 스레드 GPU 로 전환.
-   * 워커가 준비되고 3초 뒤부터, 최근 2초 동안 결과가 초당 8회 미만이면.
-   */
-  private checkWorkerSpeed(nowMs: number): void {
-    if (this.falling || !this.workerReadyAt || nowMs - this.workerReadyAt < 3000) return;
-    this.resultTimes = this.resultTimes.filter((t) => nowMs - t < 2000);
-    if (this.resultTimes.length >= 16) return;
+  /** Completed slow computations or an actual worker failure trigger this. */
+  private fallBackToMain(reason: string): void {
+    if (this.falling || this.closed) return;
     this.falling = true;
-    log.warn("tracker", `워커 추론이 느림 (최근 2초 ${this.resultTimes.length}회) → 메인 스레드 GPU 로 전환`);
+    log.warn("tracker", reason + " → 메인 스레드 GPU 로 전환");
     this.worker?.terminate();
     this.worker = null;
     this.busy = false;
     this.mode = "전환 중…";
-    void this.initMain().catch((e) => log.error("tracker", `메인 스레드 전환 실패: ${String(e)}`));
+    void this.initMain().catch(e => log.error("tracker", "메인 스레드 전환 실패: " + String(e)));
   }
 
   /** 로컬 모델 우선, 없으면 CDN 폴백 */
@@ -171,7 +178,9 @@ export class FaceTracker {
   /** 매 렌더 프레임에 호출. 새 비디오 프레임일 때만 추론. */
   update(video: HTMLVideoElement, nowMs: number, input: HTMLCanvasElement | HTMLVideoElement = video, hint: FaceHint | null = null): TrackResult {
     if ((!this.landmarker && !this.worker) || video.readyState < 2) return this.lastResult;
-    if (this.worker) this.checkWorkerSpeed(nowMs);
+    if (nowMs - this.lastUpdateAt > 1000 || (typeof document !== "undefined" && document.hidden))
+      this.workerHealth.reset(nowMs);
+    this.lastUpdateAt = nowMs;
     if (this.worker && this.busy) return this.lastResult; // 앞 프레임 추론 중 — 렌더는 기다리지 않음
     if (video.currentTime === this.lastVideoTime) return this.lastResult;
     this.lastVideoTime = video.currentTime;
@@ -183,10 +192,15 @@ export class FaceTracker {
       const w = this.worker;
       const epoch = this.inputEpoch;
       this.busy = true;
-      createImageBitmap(input).then(
-        (bitmap) => w.postMessage({ type: "frame", bitmap, ts: nowMs, epoch, hint }, [bitmap]),
-        () => (this.busy = false),
-      );
+      createImageBitmap(input).then(bitmap => {
+        if (w !== this.worker || epoch !== this.inputEpoch) {
+          bitmap.close();
+          if (w === this.worker) this.busy = false;
+          return;
+        }
+        try { w.postMessage({ type: "frame", bitmap, ts: nowMs, epoch, hint }, [bitmap]); }
+        catch (e) { bitmap.close(); this.fallBackToMain(String(e)); }
+      }, () => { if (w === this.worker) this.busy = false; });
       return this.lastResult;
     }
     if (!this.landmarker) return this.lastResult;
@@ -212,6 +226,7 @@ export class FaceTracker {
 
   resetInput(): void {
     this.recovery.reset();
+    this.workerHealth.reset(performance.now());
     this.inputEpoch++;
     this.lastResult = { faces: [], inferenceMs: 0 };
     this.lastVideoTime = -1;
@@ -219,6 +234,9 @@ export class FaceTracker {
   }
 
   close(): void {
+    this.closed = true;
+    this.inputEpoch++;
+    this.busy = false;
     this.worker?.terminate();
     this.worker = null;
     this.landmarker?.close();

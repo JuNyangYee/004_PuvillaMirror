@@ -951,7 +951,11 @@ export class PuuvillaCharacter implements CharacterRig {
     this.model.position.y = -this.cfg.character.focusYcm * this.cfg.character.modelScale;
   }
 
-  apply(p: CharacterParams, dtSec: number, timeSec: number, body: BodyPose | null = null): void {
+  prepareRender(): void {
+    this.cageSurface?.update();
+  }
+
+  apply(p: CharacterParams, dtSec: number, timeSec: number, body: BodyPose | null = null, deferSurface = false): void {
     const ch = this.cfg.character, fc = this.cfg.face;
     const k = 1 - Math.exp(-dtSec * 18);
     for (const key of Object.keys(this.cur) as (keyof CharacterParams)[]) {
@@ -1229,7 +1233,7 @@ export class PuuvillaCharacter implements CharacterRig {
     }
     // Seat_A 어깨 보조 본: 어깨 회전의 k/K (어깨 살·겨드랑이가 호를 그리며 따라감)
     for (const h of this.seatHelpers) h.bone.quaternion.slerpQuaternions(ID, h.src.quaternion, h.frac);
-    this.cageSurface?.update();
+    if (!deferSurface) this.prepareRender();
 
     // ── 눈: 감으면 눈알은 머리 속으로 작아지며 사라지고, 털이 덮고, 표면에 '‿' 곡선 (3D 가이드) ──
     if (timeSec >= this.nextBlinkAt) {
