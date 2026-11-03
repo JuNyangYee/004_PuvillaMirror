@@ -211,7 +211,21 @@
     "pViewHeightCm": 250,
     "pViewOffsetXcm": 0,
     "centerLongScreens": true,
-    "cameraYawDeg": 0
+    "cameraYawDeg": 0,
+    "lightDirections": {
+      "key": {
+        "azimuth": -35,
+        "elevation": 30
+      },
+      "fill": {
+        "azimuth": 50,
+        "elevation": 55
+      },
+      "rim": {
+        "azimuth": 145,
+        "elevation": 35
+      }
+    }
   },
   "filter": {
     "enabled": false,

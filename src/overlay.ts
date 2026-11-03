@@ -1,4 +1,5 @@
 import GUI from "lil-gui";
+import {resetLightDirections, type LightRole} from "./lighting";
 import {resetCameraView, ORBIT_LIMITS} from "./cameraView";
 import { downloadConfig, saveConfig, type Config } from "./config";
 import type { FaceSignal } from "./signals";
@@ -152,7 +153,7 @@ export class Overlay {
     f6.add(cfg.face, "lineCm", 0.2, 2, 0.05).name("눈썹 굵기 (cm)").onChange(onC);
     f6.close();
 
-    const f7 = this.gui.addFolder("푸빌라 털·조명");
+    const f7 = this.gui.addFolder("푸빌라 털·동작");
     f7.add(cfg.fur, "lengthCm", 0, 4, 0.05).name("털 길이 (cm)").onChange(onC);
     f7.add(cfg.fur, "freq", 1, 14, 0.1).name("털 가닥 촘촘함 (가닥/cm)").onChange(onC);
     f7.add(cfg.fur, "minDensity", 0, 0.9, 0.01).name("털 길이 들쭉날쭉 (0~0.9)").onChange(onC);
@@ -193,13 +194,27 @@ export class Overlay {
       },
     }, "copy").name("📋 시점 값 복사 (전달용)");
     fv.close();
-    f7.add(cfg.scene, "exposure", 0.4, 1.6, 0.01).name("전체 밝기 (노출, ×)").onChange(onS);
-    f7.add(cfg.scene, "keyLight", 0, 3, 0.01).name("조명: 주광 (오른쪽 위 앞)").onChange(onS);
-    f7.add(cfg.scene, "fillLight", 0, 2, 0.01).name("조명: 보조광 (왼쪽 앞)").onChange(onS);
-    f7.add(cfg.scene, "rimLight", 0, 2, 0.01).name("조명: 뒤 테두리").onChange(onS);
-    f7.add(cfg.scene, "hemiLight", 0, 2, 0.01).name("조명: 주변광 (그림자 밝기)").onChange(onS);
-    f7.add(cfg.scene, "envLight", 0, 1.5, 0.01).name("조명: 환경 반사").onChange(onS);
     f7.close();
+    const lighting = this.gui.addFolder("조명 — 밝기·위치");
+    lighting.add(cfg.scene, "exposure", .4, 1.6, .01).name("전체 밝기 (노출)").onChange(onS);
+    const lightHint = document.createElement('div');
+    lightHint.textContent = '정면 구도 기준: 좌우 0°는 앞, −90°는 왼쪽, +90°는 오른쪽, ±180°는 뒤. 높이 90°는 머리 위입니다.';
+    lightHint.style.cssText = 'padding:8px 10px;line-height:1.5;opacity:.75;font-size:11px';
+    lighting.$children.appendChild(lightHint);
+    const addLight = (role:LightRole, title:string, intensity:'keyLight'|'fillLight'|'rimLight', max:number) => {
+      const folder = lighting.addFolder(title);
+      folder.add(cfg.scene, intensity, 0, max, .01).name('밝기').onChange(onS);
+      folder.add(cfg.scene.lightDirections[role], 'azimuth', -180, 180, 1).name('좌우 위치 (°)').onChange(onS).listen();
+      folder.add(cfg.scene.lightDirections[role], 'elevation', 0, 90, 1).name('높이 각도 (°)').onChange(onS).listen();
+      folder.close();
+    };
+    addLight('key', '주광', 'keyLight', 3);
+    addLight('fill', '보조광', 'fillLight', 2);
+    addLight('rim', '테두리광', 'rimLight', 2);
+    lighting.add(cfg.scene, 'hemiLight', 0, 2, .01).name('주변광 (그림자 밝기)').onChange(onS);
+    lighting.add(cfg.scene, 'envLight', 0, 1.5, .01).name('환경 반사').onChange(onS);
+    lighting.add({reset:()=>{resetLightDirections(cfg.scene.lightDirections);onS();this.requestSave();}},'reset').name('조명 위치 초기화');
+    lighting.close();
 
     const f5 = this.gui.addFolder("카메라·트래커 (재시작 필요)");
     if (import.meta.env.DEV) f5.add(cfg.camera, "deviceLabelIncludes").name("카메라 이름 (빈칸=기본)");

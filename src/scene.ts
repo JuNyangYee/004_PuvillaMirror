@@ -9,6 +9,7 @@ import {portraitViewport, PORTRAIT_ASPECT} from "./presentation";
 import {GroundedBackdrop} from "./groundedBackdrop";
 import {applyCameraView, CAMERA_FOV} from "./cameraView";
 import type {Backdrop} from "./backdrop";
+import {lightPosition} from "./lighting";
 
 /** 시야각 18° (망원 — 원근 왜곡 적게, 가이드 3D 렌더 느낌) */
 const CAM_FOV = CAMERA_FOV;
@@ -37,6 +38,9 @@ export class Scene {
   /** 오버레이에서 조명 값을 바꿨을 때 */
   applyLighting(): void {
     const winter=this.winterLighting;
+    for(const role of ["key","fill","rim"] as const){
+      this.lights[role].position.set(...lightPosition(this.cfg.lightDirections[role]));
+    }
     this.lights.key.color.set(winter ? '#ffe0b4' : '#ffffff');
     this.lights.fill.color.set(winter ? '#9bbcff' : '#ffffff');
     this.lights.rim.color.set(winter ? '#91aaff' : '#ffffff');
@@ -84,11 +88,8 @@ export class Scene {
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = cfg.envLight;
     const key = new THREE.DirectionalLight(0xffffff, cfg.keyLight);
-    key.position.set(2, 3, 4);
     const fill = new THREE.DirectionalLight(0xffffff, cfg.fillLight);
-    fill.position.set(-3, 0, 3);
     const rim = new THREE.DirectionalLight(0xffffff, cfg.rimLight);
-    rim.position.set(0, 2, -4);
     // 가이드 2.4 그림자는 중립 회색 (살구빛 바닥 반사를 넣으면 털이 분홍빛으로 물듦)
     const hemi = new THREE.HemisphereLight(0xffffff, 0xd8d8d8, cfg.hemiLight);
     this.scene.add(key, fill, rim, hemi);

@@ -1,4 +1,5 @@
 import {enforcePresentation} from "./presentation";
+import {DEFAULT_LIGHT_DIRECTIONS, type LightDirections} from "./lighting";
 import { isEmbedded } from "./embedded";
 /**
  * 런타임 설정. public/config.json 을 로드해 기본값과 병합한다.
@@ -305,7 +306,9 @@ export interface Config {
     /** 카메라 위아래 각(°): − = 위에서 살짝 내려다봄 (가이드 3D 렌더 구도 — 코가 눈에서 떨어져 보임) */
     cameraTiltDeg: number;
     cameraYawDeg: number;
-    /** 조명 세기: 키(오른쪽 위 앞)·필(왼쪽 앞)·림(뒤)·하늘/바닥 반구·환경 반사. 털이 255 로 날아가지 않게 (가이드 2.4 밝기 분포 기준) */
+    /** 주광·보조광·테두리광의 장면 기준 방향. */
+    lightDirections: LightDirections;
+    /** 조명 세기 및 주변광·환경 반사. */
     keyLight: number;
     fillLight: number;
     rimLight: number;
@@ -614,6 +617,7 @@ export const DEFAULT_CONFIG: Config = {
   scene: {
     bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 0.88, cameraTiltDeg: -6, cameraYawDeg: 0,
     keyLight: 1.4, fillLight: 0.55, rimLight: 1.1, hemiLight: 0.8, envLight: 0.3,
+    lightDirections: structuredClone(DEFAULT_LIGHT_DIRECTIONS),
     layout: "portrait", outputMirror: false, aspect: 9 / 16, viewCenterCm: 133, viewHeightCm: 90, viewOffsetXcm: 0,
     pViewCenterCm: 95, pViewHeightCm: 250, pViewOffsetXcm: 0, centerLongScreens: false,
   },
