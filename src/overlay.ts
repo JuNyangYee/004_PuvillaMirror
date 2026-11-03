@@ -37,7 +37,7 @@ export class Overlay {
 
   constructor(private cfg: Config, hooks: { onSmoothingChange: () => void; onCharacterChange: () => void; onSceneChange: () => void; onFaceNeutral?: () => void }) {
     this.statsEl = document.getElementById("stats")!;
-    this.gui = new GUI({ title: `푸빌라 미믹 튜닝  (d: 숨기기) · 버전 ${cfg.build}`, width: 360 });
+    this.gui = new GUI({ title: "푸빌라 설정 · D로 닫기", width: 360 });
     const onC = hooks.onCharacterChange;
 
     const f1 = this.gui.addFolder("접근 판정 — 언제 등장/퇴장할지");
@@ -61,6 +61,7 @@ export class Overlay {
     hint.textContent = "기본은 노란 영역 안에서 가장 큰 얼굴을 잡아 바로 따라한다. 잡은 사람은 크기가 조금 변해도 유지하고, 놓치면 다시 선택한다. '락온되면 바로 따라하기'를 끄면 얼굴 크기·중앙 범위·가운데 우선 조건을 추가로 적용한다. 노란 박스를 끌어 락온 영역을 옮기거나 크기를 바꿀 수 있다.";
     f1.$children.appendChild(hint);
 
+    f1.close();
     const f2 = this.gui.addFolder("고개·표정 매핑 — 얼마나 크게 따라할지");
     f2.add(cfg.mapping, "autoNeutral").name("카메라 각도·뜬 눈 자동 기준").onChange(() => hooks.onFaceNeutral?.());
     f2.add({ calibrate: () => hooks.onFaceNeutral?.() }, "calibrate").name("화면 보고 눈 뜬 상태로 기준 다시 맞춤");
@@ -91,7 +92,7 @@ export class Overlay {
     f2.close();
 
     const f8 = this.gui.addFolder("상반신 — 몸통·팔 따라하기");
-    f8.add(cfg.body, "enabled").name("상반신 미믹 켜기");
+    f8.add({enabled:cfg.body.enabled&&cfg.pose.enabled}, "enabled").name("상반신 추적·미믹 (재시작)").onChange((on:boolean)=>{cfg.body.enabled=on;cfg.pose.enabled=on;});
     f8.add(cfg.body, "torsoYawGain", 0, 2, 0.05).name("몸 비틀기 배율 (×)");
     f8.add(cfg.body, "torsoRollGain", 0, 2, 0.05).name("몸 옆으로 기울기 배율 (×)");
     f8.add(cfg.body, "torsoPitchGain", 0, 2, 0.05).name("몸 앞뒤 숙이기 배율 (×)");
@@ -106,18 +107,6 @@ export class Overlay {
     f8.add(cfg.body, "beta", 0, 2, 0.01).name("팔 빠른 동작 반응 (클수록 빠름)").onChange(hooks.onSmoothingChange);
     f8.add(cfg.body, "responsiveArms").name("큰 팔 동작 빠르게 따라가기");
     f8.close();
-
-    const f8b = this.gui.addFolder("자유 팔 (생성 A포즈 몸) — 쉬는 자세·인사");
-    f8b.add(cfg.character, "freeArmIdleTheta", 0, 1.5, 0.01).name("쉴 때 팔 벌림 (rad, 아래=0)");
-    f8b.add(cfg.character, "freeArmIdlePhi", -0.5, 1.5, 0.01).name("쉴 때 팔 앞으로 (rad)");
-    f8b.add(cfg.character, "freeArmIdleElbow", -0.5, 1.5, 0.01).name("쉴 때 팔꿈치 굽힘 (rad)");
-    f8b.add(cfg.character, "freeArmWaveTheta", 0.5, 3.0, 0.01).name("인사 팔 들기 (rad, 아래=0)");
-    f8b.add(cfg.character, "freeArmWavePhi", -0.5, 1.5, 0.01).name("인사 팔 앞으로 (rad)");
-    f8b.add(cfg.character, "freeArmWaveElbow", -1.5, 1.5, 0.01).name("인사 팔꿈치 굽힘 (rad)");
-    f8b.add(cfg.character, "freeArmWaveSwing", 0, 1, 0.01).name("인사 까딱 폭 (rad)");
-    f8b.add(cfg.character, "freeArmWaveHz", 0.2, 4, 0.05).name("인사 까딱 속도 (회/초)");
-    f8b.add(cfg.character, "freeArmRaiseMaxRad", 1, 3.1, 0.05).name("미믹 팔 드는 최대 (rad)");
-    f8b.close();
 
     const f3 = this.gui.addFolder("떨림 보정 — 부드러움 vs 반응속도");
     f3.add(cfg.smoothing, "headMinCutoff", 0.1, 5, 0.05).name("고개 부드러움 (작을수록 부드럽고 느림)").onChange(hooks.onSmoothingChange);
@@ -160,11 +149,9 @@ export class Overlay {
     f6.add(cfg.face, "browEnabled").name("눈썹 획 (가이드 3D 엔 없음)");
     f6.add(cfg.face, "browOffsetY", 2, 10, 0.1).name("눈썹 높이 (눈 위 cm)").onChange(onC);
     f6.add(cfg.face, "lineCm", 0.2, 2, 0.05).name("눈썹 굵기 (cm)").onChange(onC);
-    f6.add(cfg.face, "scarfStripes", 2, 60, 1).name("스카프 줄무늬 수").onChange(onC);
-    f6.add(cfg.face, "scarfStripeAngle", -3.14, 3.14, 0.01).name("스카프 줄무늬 각도 (rad)").onChange(onC);
     f6.close();
 
-    const f7 = this.gui.addFolder("푸빌라 털·화면 구도");
+    const f7 = this.gui.addFolder("푸빌라 털·조명");
     f7.add(cfg.fur, "lengthCm", 0, 4, 0.05).name("털 길이 (cm)").onChange(onC);
     f7.add(cfg.fur, "freq", 1, 14, 0.1).name("털 가닥 촘촘함 (가닥/cm)").onChange(onC);
     f7.add(cfg.fur, "minDensity", 0, 0.9, 0.01).name("털 길이 들쭉날쭉 (0~0.9)").onChange(onC);
@@ -176,40 +163,25 @@ export class Overlay {
     f7.add(cfg.fur, "rootShade", 0.3, 1, 0.01).name("털 뿌리 그늘 (작을수록 어둡게)").onChange(onC);
     f7.add(cfg.fur, "faceFurScale", 0, 1, 0.01).name("얼굴 털 길이 비율 (×)").onChange(onC);
     f7.add(cfg.fur, "shells", 0, 32, 1).name("털 층 수 (재시작, 성능 영향 큼)");
-    f7.add(cfg.character, "modelScale", 0.01, 0.1, 0.001).name("캐릭터 크기").onChange(onC);
-    f7.add(cfg.character, "focusYcm", 0, 170, 1).name("화면 중앙에 올 높이 (cm)").onChange(onC);
     f7.add(cfg.character, "bodyFollow", 0, 0.6, 0.01).name("몸 신호 없을 때 몸이 고개 따라감 (×)");
     f7.add(cfg.character, "enterDrop", 0, 15, 0.1).name("등장/퇴장 이동 거리");
     f7.add(cfg.character, "attractPeek", 0, 1, 0.01).name("유도 때 올라오는 정도 (0~1)");
     f7.add(cfg.character, "waveLiftRad", 0, 2, 0.01).name("손 흔들 때 팔 높이 (rad)");
     const onS = hooks.onSceneChange;
-    const ff = this.gui.addFolder("그림 필터 (테스트)");
-    ff.add(cfg.filter, "enabled").name("켜기 (왼쪽 아래 붓 버튼과 같음)").listen();
-    ff.add(cfg.filter, "style", { "부드러운 털": "soft", "붓 터치": "brush" }).name("방식");
-    ff.add(cfg.filter, "softColor", 0.03, 0.4, 0.01).name("부드러운 털: 섞는 색 차이 (작을수록 음영 보존)");
-    ff.add(cfg.filter, "radiusPx", 1, 10, 0.5).name("필터 반경 (px, 클수록 몽글·무거움)");
-    ff.add(cfg.filter, "hardness", 1, 30, 0.5).name("경계 보존 (클수록 윤곽 또렷)");
-    ff.add(cfg.filter, "edgeSharpness", 1, 18, 0.5).name("덩어리 경계 날카로움");
-    ff.add(cfg.filter, "edgeLo", 0, 0.6, 0.01).name("윤곽: 털 끝 지우는 투명도 (클수록 윤곽 짧고 또렷)");
-    ff.add(cfg.filter, "edgeHi", 0.2, 1, 0.01).name("윤곽: 털로 채우는 투명도 (작을수록 또렷)");
-    ff.add(cfg.filter, "sharpen", 0, 2, 0.05).name("마지막 선명화 (0 = 없음)");
-    ff.add(cfg.filter, "posterLevels", 0, 12, 1).name("포스터 밝기 단계 (0 = 끔)");
-    ff.open();
+    const edge = this.gui.addFolder("합성 윤곽 — 고급");
+    edge.add(cfg.filter,"edgeLo",0,.6,.01).name("털 끝 투명도 하한");
+    edge.add(cfg.filter,"edgeHi",.2,1,.01).name("털 끝 투명도 상한");edge.close();
+
     const fv = this.gui.addFolder("화면 시점 — 직접 잡기");
-    fv.add(cfg.scene, "layout", { 자동: "auto", 가로: "landscape", 세로: "portrait" }).name("화면 방향 (왼쪽 아래 버튼과 같음)").onChange(onS).listen();
-    fv.add(cfg.scene, "viewCenterCm", 20, 220, 0.5).name("가로: 시점 높이 (cm)").onChange(onS).listen();
-    fv.add(cfg.scene, "viewHeightCm", 25, 260, 0.5).name("가로: 줌 (보이는 높이 cm, 작을수록 확대)").onChange(onS).listen();
-    fv.add(cfg.scene, "viewOffsetXcm", -80, 80, 0.5).name("가로: 좌우 이동 (cm)").onChange(onS).listen();
-    fv.add(cfg.scene, "pViewCenterCm", 20, 220, 0.5).name("세로: 시점 높이 (cm)").onChange(onS).listen();
-    fv.add(cfg.scene, "pViewHeightCm", 25, 260, 0.5).name("세로: 줌 (보이는 높이 cm)").onChange(onS).listen();
-    fv.add(cfg.scene, "pViewOffsetXcm", -80, 80, 0.5).name("세로: 좌우 이동 (cm)").onChange(onS).listen();
+    fv.add(cfg.scene, "pViewCenterCm", 20, 220, 0.5).name("시점 높이 (cm)").onChange(onS).listen();
+    fv.add(cfg.scene, "pViewHeightCm", 25, 260, 0.5).name("줌 (보이는 높이 cm)").onChange(onS).listen();
+    fv.add(cfg.scene, "pViewOffsetXcm", -80, 80, 0.5).name("좌우 이동 (cm)").onChange(onS).listen();
     fv.add(cfg.scene, "cameraTiltDeg", -30, 30, 0.5).name("카메라 위아래 각 (°, −=내려다봄)").onChange(onS);
-    fv.add(cfg.scene, "aspect", 1, 2.4, 0.01).name("화면 비율 (가로/세로, 16:9=1.78)").onChange(onS);
     fv.add({
       copy: () => {
         const r = (x: number) => Math.round(x * 10) / 10;
         const sc = cfg.scene;
-        const v = { viewCenterCm: r(sc.viewCenterCm), viewHeightCm: r(sc.viewHeightCm), viewOffsetXcm: r(sc.viewOffsetXcm), pViewCenterCm: r(sc.pViewCenterCm), pViewHeightCm: r(sc.pViewHeightCm), pViewOffsetXcm: r(sc.pViewOffsetXcm), cameraTiltDeg: sc.cameraTiltDeg, aspect: +sc.aspect.toFixed(3) };
+        const v = { pViewCenterCm: r(sc.pViewCenterCm), pViewHeightCm: r(sc.pViewHeightCm), pViewOffsetXcm: r(sc.pViewOffsetXcm), cameraTiltDeg: sc.cameraTiltDeg, aspect: "9:16" };
         const text = `푸빌라 시점 ${JSON.stringify(v)}`;
         navigator.clipboard?.writeText(text).then(
           () => this.toast("시점 값 복사됨 — 채팅에 붙여 넣으면 기본값으로 배포"),
@@ -217,7 +189,7 @@ export class Overlay {
         );
       },
     }, "copy").name("📋 시점 값 복사 (전달용)");
-    fv.open();
+    fv.close();
     f7.add(cfg.scene, "exposure", 0.4, 1.6, 0.01).name("전체 밝기 (노출, ×)").onChange(onS);
     f7.add(cfg.scene, "keyLight", 0, 3, 0.01).name("조명: 주광 (오른쪽 위 앞)").onChange(onS);
     f7.add(cfg.scene, "fillLight", 0, 2, 0.01).name("조명: 보조광 (왼쪽 앞)").onChange(onS);
@@ -228,11 +200,11 @@ export class Overlay {
 
     const f5 = this.gui.addFolder("카메라·트래커 (재시작 필요)");
     if (import.meta.env.DEV) f5.add(cfg.camera, "deviceLabelIncludes").name("카메라 이름 (빈칸=기본)");
-    f5.add(cfg.camera, "mirror").name("거울 모드 (좌우 반전)");
+    f5.add(cfg.camera, "mirror").name("인식 입력 좌우반전 (출력 반전과 별개)");
+    f5.add(cfg.camera,"inputRotation",{"0°":0,"90°":90,"180°":180,"270°":270}).name("카메라 입력 회전 (즉시 적용)");
     f5.add(cfg.tracker, "transposeMatrix").name("고개 축 뒤집힘 보정");
     f5.add(cfg.tracker, "delegate", ["GPU", "CPU"]).name("얼굴 추론 장치");
     f5.add(cfg.tracker, "inferenceEveryNFrames", 1, 4, 1).name("얼굴 추론 간격 (프레임)");
-    f5.add(cfg.pose, "enabled").name("상반신 추적 사용");
     f5.add(cfg.pose, "everyNFrames", 1, 4, 1).name("상반신 추론 간격 (프레임)");
     f5.close();
 
@@ -242,6 +214,8 @@ export class Overlay {
     this.gui.add({ reload: () => location.reload() }, "reload").name("재시작");
 
     window.addEventListener("keydown", (e) => {
+      if(e.repeat||e.isComposing||e.ctrlKey||e.metaKey||e.altKey)return;
+      if(e.target instanceof HTMLElement&&(e.target.isContentEditable||e.target.closest('input,textarea,select')))return;
       if (e.key === "d" || e.key === "D") this.toggle();
     });
     // 기본은 숨김 — d 키 또는 오른쪽 위 ⚙ 버튼(폰·태블릿)으로 열기
@@ -249,12 +223,11 @@ export class Overlay {
     btn.id = "overlayToggle";
     btn.classList.add("view-control");
     btn.textContent = "⚙";
-    btn.title = "튜닝 화면 열기/닫기 (d)";
-    btn.style.cssText =
-      "position:fixed;right:10px;top:10px;z-index:30;width:36px;height:36px;border-radius:18px;border:0;" +
-      "background:rgba(0,0,0,.25);color:#fff;font:18px system-ui;cursor:pointer;opacity:.55";
+    btn.title = "설정 열기/닫기 (D)";
+    btn.style.order="5";
+    btn.setAttribute("aria-label","설정");
     btn.onclick = () => this.toggle();
-    document.body.appendChild(btn);
+    document.getElementById("viewControls")!.appendChild(btn);
     this.visible = true;
     this.toggle();
   }
@@ -296,6 +269,7 @@ export class Overlay {
   toggle(): void {
     this.visible = !this.visible;
     document.body.classList.toggle("debug-hidden", !this.visible);
+    document.getElementById("overlayToggle")?.setAttribute("aria-expanded", String(this.visible));
   }
 
   update(s: OverlayStats): void {

@@ -6,7 +6,7 @@ import { FaceTracker } from "./tracker";
 import { SignalProcessor, emptySignal } from "./signals";
 import { MimicStateMachine } from "./state";
 import { mapSignal, NEUTRAL_PARAMS } from "./character/mapping";
-import { ProxyCharacter, type CharacterRig } from "./character/proxy";
+import { type CharacterRig } from "./character/proxy";
 import { PuuvillaCharacter } from "./character/puuvilla";
 import { SimInput } from "./sim";
 import { PoseTracker } from "./poseTracker";
@@ -28,30 +28,13 @@ import { log } from "./logger";
  *             StateMachine → mapSignal → CharacterRig.apply → Scene.render
  *         웹캠 → PoseTracker(MediaPipe Pose) → BodyProcessor(미러·스무딩) ──────────┘ (상반신)
  * `?sim=1` 이면 웹캠·트래커 대신 SimInput(마우스/키보드)이 FaceSignal 을 만든다.
- * `?char=proxy` 면 도형 프록시 캐릭터.
+ * 출력은 9:16 무대와 서 있는 목도리 푸빌라로 고정.
  */
-/** 의상 선택(오른쪽 아래 아이콘)은 공용 설정과 따로 그 기기에만 */
-const OUTFIT_KEY = "pubilla-mimic-outfit";
-
 async function main(): Promise<void> {
   const boot = document.getElementById("boot")!;
   const setBoot = (s: string) => (boot.textContent = s);
 
   const cfg = await loadConfig();
-  try {
-    const o = localStorage.getItem(OUTFIT_KEY);
-    if (o === "classic" || o === "christmas") cfg.outfit.style = o;
-  } catch {
-    /* 저장소 막힘 */
-  }
-  // 개발: ?sitModel=pu_sit_12 → 앉은 메쉬 변형 비교
-  const sitM = new URLSearchParams(location.search).get("sitModel");
-  if (import.meta.env.DEV && sitM) {
-    cfg.character.sitModelPath = `./models/${sitM}.obj`;
-    cfg.character.sitMufflerPath = `./models/${sitM.replace("pu_sit", "muffler_sit")}.bin`;
-    cfg.outfit.style = "christmas";
-    cfg.outfit.sitBody = true;
-  }
   const params = new URLSearchParams(location.search);
   const kiosk = isKiosk();
   const sim = params.get("sim") === "1" ? new SimInput(cfg) : null;
@@ -114,36 +97,20 @@ async function main(): Promise<void> {
   let bodyTarget = new BodyTargetLock(cfg);
   let fsm = new MimicStateMachine(cfg);
   const scene = new Scene(document.getElementById("app")!, cfg.scene, cfg.character, cfg.filter);
-  // 배경 (가운데 아래 버튼으로 주황 ↔ 겨울 마을) — 키오스크는 공용 설정 그대로 주황
-  const backdrop = kiosk ? null : new Backdrop({ top: cfg.scene.bgTop, bottom: cfg.scene.bgBottom });
+  // 배경과 조명은 키오스크에서도 같은 겨울 마을 구성을 사용.
+  const backdrop = new Backdrop({ top: cfg.scene.bgTop, bottom: cfg.scene.bgBottom });
   if (backdrop) {
     scene.backdrop = backdrop;
+    scene.setWinterLighting(backdrop.usesImage);
     backdrop.onChange = () => {
+      scene.setWinterLighting(backdrop.usesImage);
       if (scene.ready) scene.render();
     };
   }
 
   setBoot("캐릭터 로딩 중…");
-  const charKind = params.get("char") ?? cfg.character.model;
-  // ?seat=1 → 앉은 몸(Seat_A, 팔 교체 작업 중) · ?seat=0 → 서 있는 몸. 없으면 config 값
-  if (params.has("seat")) cfg.outfit.seatBody = params.get("seat") !== "0";
-  // ?sit=1 → 10/15 앉은 몸(V02 A.fbx: pu_sit.obj + muffler_sit.bin). seat 보다 우선순위 낮음(seat=0 과 같이)
-  if (params.has("sit")) cfg.outfit.sitBody = params.get("sit") !== "0";
-  // ?arm=1 → 팔을 떼어 낸 서 있는 케이지(pu_stand_arm.obj, scripts/stand_arm_split.py) — 작업 확인용
-  if (params.get("arm") === "1") cfg.character.modelPath = "./models/pu_stand_arm.obj";
-  // ?wave=1 → 손 흔들기 계속 (확인용, 캐릭터 생성 뒤 적용)
-  const forceWave = params.has("wave") ? Number(params.get("wave") || 1) : 0;
-  let character: CharacterRig;
-  if (charKind === "proxy") {
-    character = new ProxyCharacter(cfg.character);
-  } else {
-    try {
-      character = await PuuvillaCharacter.load(cfg);
-    } catch (e) {
-      log.error("character", `푸빌라 로드 실패 → 프록시로 대체: ${String(e)}`);
-      character = new ProxyCharacter(cfg.character);
-    }
-  }
+  const forceWave = import.meta.env.DEV && params.has("wave") ? Number(params.get("wave") || 1) : 0;
+  const character: CharacterRig = await PuuvillaCharacter.load(cfg);
   scene.characterOutput.add(character.root);
   scene.beforeRender = () => character.prepareRender?.();
   if (forceWave > 0 && character instanceof PuuvillaCharacter) character.debugWave = Math.min(1, forceWave);
@@ -157,10 +124,10 @@ async function main(): Promise<void> {
   });
   scene.onContextLost(() => scheduleFatalReload(cfg.kiosk, "webgl context lost"));
 
-  // 터치 기기(폰·태블릿)는 설정 메뉴·통계·카메라 미리보기를 아예 뺌 — 시점은 터치로 확대·이동
+  // 터치에서도 설정 버튼은 유지. 상세 패널은 기본으로 숨긴다.
   // ?debug=1 이면 터치 기기에서도 튜닝 화면·속도 표시 (폰에서 원인 확인용)
   const touch = matchMedia("(pointer: coarse)").matches && params.get("debug") !== "1";
-  const overlay = kiosk || touch
+  const overlay = kiosk
     ? null
     : new Overlay(cfg, {
         onFaceNeutral: () => signals.recalibrateNeutral(),
@@ -174,18 +141,10 @@ async function main(): Promise<void> {
         onSceneChange: () => scene.applyLighting(),
       });
 
-  const zoneEditor = kiosk || touch ? null : new LockZoneEditor(cfg, cameraInput?.canvas ?? video, !sim);
+  const zoneEditor = kiosk ? null : new LockZoneEditor(cfg, cameraInput?.canvas ?? video, !sim);
   if (touch) document.body.classList.add("debug-hidden");
   if (!kiosk)
-    setupViewControls(cfg, scene, () => (overlay ? overlay.requestSave() : void saveConfig(cfg)), backdrop, (st) => {
-      // 의상마다 몸 메쉬가 다름(서 있는 푸빌라+스카프 / 앉은 푸빌라+목도리) → 이 기기에 기억하고 다시 불러옴
-      try {
-        localStorage.setItem(OUTFIT_KEY, st);
-      } catch {
-        /* 저장 불가 */
-      }
-      location.reload();
-    });
+    setupViewControls(cfg, scene, () => (overlay ? overlay.requestSave() : void saveConfig(cfg)), backdrop);
   if (zoneEditor && overlay) zoneEditor.onChange = () => overlay.requestSave();
 
   window.addEventListener("mimic:camera-lost", () => scheduleFatalReload(cfg.kiosk, "camera lost"));

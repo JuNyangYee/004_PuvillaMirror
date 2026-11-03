@@ -35,7 +35,8 @@
     "performance:check": "node --experimental-transform-types scripts/check-performance.mjs",
     "build:portable": "node scripts/build-portable.mjs",
     "visitor:check": "node --experimental-transform-types scripts/check-visitor-evidence.mjs",
-    "pipeline:check": "node --experimental-transform-types scripts/check-inference-scheduling.mjs && node --experimental-transform-types scripts/check-render-preparation.mjs"
+    "pipeline:check": "node --experimental-transform-types scripts/check-inference-scheduling.mjs && node --experimental-transform-types scripts/check-render-preparation.mjs",
+    "presentation:check": "node --experimental-transform-types scripts/check-presentation.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.1.0",

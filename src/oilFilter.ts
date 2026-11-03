@@ -105,8 +105,8 @@ export class OilStrokeFilter {
     this.vao = gl.createVertexArray()!;
     renderer.resetState();
     // 필터 결과 캔버스: 우리 캔버스 위에 같은 크기로, 터치는 아래로 통과
-    this.out.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;display:block";
-    this.line.style.cssText = "position:fixed;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;pointer-events:none;z-index:2;display:none";
+    this.out.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;display:block";
+    this.line.style.cssText = "position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;pointer-events:none;z-index:3;display:none";
     document.getElementById("app")!.after(this.out, this.line);
     this.fx = new OilStroke(this.out);
   }

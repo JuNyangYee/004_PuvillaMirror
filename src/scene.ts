@@ -5,6 +5,7 @@ import { log } from "./logger";
 import { lightMobile } from "./mobile";
 import { PaintFilter } from "./paintFilter";
 import { OilStrokeFilter } from "./oilFilter";
+import {portraitViewport, PORTRAIT_ASPECT} from "./presentation";
 
 /** 시야각 18° (망원 — 원근 왜곡 적게, 가이드 3D 렌더 느낌) */
 const CAM_FOV = 18;
@@ -19,8 +20,19 @@ export class Scene {
   private onLost: (() => void) | null = null;
   private lights!: { key: THREE.DirectionalLight; fill: THREE.DirectionalLight; rim: THREE.DirectionalLight; hemi: THREE.HemisphereLight };
 
+  private winterLighting = true;
+  setWinterLighting(on:boolean):void{
+    this.winterLighting=on;this.applyLighting();
+  }
+
   /** 오버레이에서 조명 값을 바꿨을 때 */
   applyLighting(): void {
+    const winter=this.winterLighting;
+    this.lights.key.color.set(winter ? '#ffe0b4' : '#ffffff');
+    this.lights.fill.color.set(winter ? '#9bbcff' : '#ffffff');
+    this.lights.rim.color.set(winter ? '#91aaff' : '#ffffff');
+    this.lights.hemi.color.set(winter ? '#b5caff' : '#ffffff');
+    this.lights.hemi.groundColor.set(winter ? '#e8d7ce' : '#d8d8d8');
     this.lights.key.intensity = this.cfg.keyLight;
     this.lights.fill.intensity = this.cfg.fillLight;
     this.lights.rim.intensity = this.cfg.rimLight;
@@ -54,7 +66,7 @@ export class Scene {
     // 배경: 가이드 KEY COLOR(#F55433) 계열 세로 그라디언트 — 그래픽 팀 프레임 이미지로 교체 대상
     // 배경은 페이지 전체 그라디언트 하나로 (캔버스는 투명) — 세로 화면에서 위아래 여백과 캔버스 경계가 끊겨 보이지 않게
     this.renderer.setClearColor(0x000000, 0);
-    document.body.style.background = `linear-gradient(${cfg.bgTop}, ${cfg.bgBottom}) fixed`;
+    (document.getElementById("stage") ?? container).style.background = `linear-gradient(${cfg.bgTop}, ${cfg.bgBottom})`;
 
     // 부드러운 스튜디오 반사 + 키/필/림
     const pmrem = new THREE.PMREMGenerator(this.renderer);
@@ -70,6 +82,7 @@ export class Scene {
     const hemi = new THREE.HemisphereLight(0xffffff, 0xd8d8d8, cfg.hemiLight);
     this.scene.add(key, fill, rim, hemi);
     this.lights = { key, fill, rim, hemi };
+    this.applyLighting();
 
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -98,11 +111,8 @@ export class Scene {
   }
 
   /** 지금 화면 방향의 시점 값 (터치 확대·이동이 이 값을 바꿈) */
-  /** 지금 적용 중인 방향: layout 이 auto 면 화면 방향(세로로 긴 화면 = 세로) */
-  get portrait(): boolean {
-    const l = this.cfg.layout;
-    return l === "auto" ? window.innerHeight > window.innerWidth : l === "portrait";
-  }
+  /** 운영 화면은 항상 세로 9:16. */
+  get portrait(): boolean { return true; }
 
   view(): { center: number; height: number; offsetX: number } {
     const c = this.cfg;
@@ -123,18 +133,11 @@ export class Scene {
 
   /** 화면 1px 이 캐릭터 몇 cm 인지 — 터치·드래그 이동량 변환용 */
   get cmPerPx(): number {
-    const r = window.innerWidth / Math.max(1, window.innerHeight);
-    const A = this.portrait ? 9 / 16 : this.cfg.aspect;
-    const v = this.view();
-    const visH = r >= A ? v.height : (v.height * A) / r;
-    return visH / window.innerHeight;
+    return this.view().height / Math.max(1,portraitViewport(innerWidth,innerHeight).height);
   }
 
   resize(): void {
-    // 캔버스는 항상 화면 전체 (자르거나 여백을 두지 않음).
-    // 시점 = 기준 비율(가로 aspect / 세로 9:16)의 사각형(보이는 높이 = view.height). 화면이 그보다 길쭉하면 폭에 맞추고
-    // 남는 높이는 위쪽(하늘)으로, 더 넓으면 높이에 맞추고 양옆이 더 보임. 아래 끝은 항상 시점의 아래 끝에 붙음.
-    const W = window.innerWidth, H = window.innerHeight;
+    const {width:W,height:H} = portraitViewport(innerWidth,innerHeight);
     if (!W || !H) return; // 탭이 숨겨진 순간 등 크기 0 → 계산하면 카메라가 NaN 이 됨
     const el = this.renderer.domElement;
     el.style.width = "100%";
@@ -146,12 +149,10 @@ export class Scene {
     const bw = Math.floor(W * pr), bh = Math.floor(H * pr);
     const resized = el.width !== bw || el.height !== bh;
     if (resized) this.renderer.setSize(W, H, false);
-    const r = W / H;
-    this.camera.aspect = r;
+    this.camera.aspect = PORTRAIT_ASPECT;
     this.camera.fov = CAM_FOV;
-    const A = this.portrait ? 9 / 16 : this.cfg.aspect;
     const s = this.ch.modelScale, v = this.view();
-    const visH = r >= A ? v.height : (v.height * A) / r;
+    const visH = v.height;
     const bottom = v.center - v.height / 2;
     const t = Math.tan(((CAM_FOV / 2) * Math.PI) / 180);
     const dist = ((visH / 2) * s) / t;

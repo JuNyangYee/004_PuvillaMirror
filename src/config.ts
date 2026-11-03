@@ -1,3 +1,4 @@
+import {enforcePresentation} from "./presentation";
 import { isEmbedded } from "./embedded";
 /**
  * 런타임 설정. public/config.json 을 로드해 기본값과 병합한다.
@@ -610,15 +611,15 @@ export const DEFAULT_CONFIG: Config = {
     armFollowPose: true,
   },
   scene: {
-    bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 0.95, cameraTiltDeg: -6,
-    keyLight: 0.75, fillLight: 0.7, rimLight: 0.7, hemiLight: 1.5, envLight: 0.45,
-    layout: "auto", outputMirror: false, aspect: 16 / 9, viewCenterCm: 133, viewHeightCm: 90, viewOffsetXcm: 0,
+    bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 0.88, cameraTiltDeg: -6,
+    keyLight: 1.4, fillLight: 0.55, rimLight: 1.1, hemiLight: 0.8, envLight: 0.3,
+    layout: "portrait", outputMirror: false, aspect: 9 / 16, viewCenterCm: 133, viewHeightCm: 90, viewOffsetXcm: 0,
     pViewCenterCm: 153.5, pViewHeightCm: 123, pViewOffsetXcm: 0, centerLongScreens: false,
   },
   outfit: {
-    style: "christmas", // 기본 = 뜨개 목도리 (곰 아이콘으로 기존 스카프)
+    style: "christmas", // 고정: 서 있는 푸빌라 + 뜨개 목도리
     sitBody: false,
-    seatBody: false, // 공개 = 서 있는 몸 + 뜨개 목도리 (10/15 구성). 앉은 몸(Seat_A) 작업은 ?seat=1 또는 DEPLOY_CONFIG 로
+    seatBody: false, // 메인 화면은 서 있는 목도리 모델로 고정
     muffler: {
       fittedPath: "./models/muffler_fit.bin", path: "./models/muffler.bin", colorMap: "./models/muffler_color.jpg", tint: "#ffffff",
       red: "#B3210F", cream: "#E9DDC9", headFromY: 128, headFollow: 0.3, scale: 1.0, offsetX: 0, offsetY: 0, offsetZ: 0, gapCm: 0.8, smoothCm: 3, hugMaxCm: 10, hugInsetCm: 3, liftMaxCm: 4, topCapCm: 0, topCapBackCm: 140,
@@ -671,7 +672,7 @@ export async function loadConfig(url = "./config.json"): Promise<Config> {
   try {
     const res = await fetch(`${url}?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    let cfg = deepMerge(DEFAULT_CONFIG, await res.json());
+    let cfg = enforcePresentation(deepMerge(DEFAULT_CONFIG, await res.json()));
     fileView = Object.fromEntries(VIEW_KEYS.map((k) => [k, cfg.scene[k]]));
     if (localMode) {
       deployed = structuredClone(cfg);
@@ -683,10 +684,10 @@ export async function loadConfig(url = "./config.json"): Promise<Config> {
         /* 저장소 막힘 → 배포 설정 그대로 */
       }
     }
-    return cfg;
+    return enforcePresentation(cfg);
   } catch (e) {
     console.warn("[config] config.json 로드 실패, 기본값 사용:", e);
-    return structuredClone(DEFAULT_CONFIG);
+    return enforcePresentation(structuredClone(DEFAULT_CONFIG));
   }
 }
 
