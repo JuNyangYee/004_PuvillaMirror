@@ -225,6 +225,11 @@
         "azimuth": 145,
         "elevation": 35
       }
+    },
+    "snow": {
+      "enabled": true,
+      "amount": 1,
+      "speed": 1
     }
   },
   "filter": {

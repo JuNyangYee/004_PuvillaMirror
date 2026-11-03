@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import {INITIAL_VIEW,applyCameraView} from './cameraView';
 import {PORTRAIT_ASPECT} from './presentation';
 
+/** Depth of the photo wall; the floor runs from it toward the camera. */
+export const BACKDROP_WALL_Z = -12;
+
 /** Photograph projected onto a backdrop and floor, sharing the character's camera. */
 export class GroundedBackdrop {
   readonly root = new THREE.Group();
@@ -23,7 +26,7 @@ export class GroundedBackdrop {
       side:THREE.DoubleSide, toneMapped:false,
     });
     const wall=new THREE.Mesh(new THREE.PlaneGeometry(240,240),this.material);
-    wall.position.set(0,floorY+120,-12);
+    wall.position.set(0,floorY+120,BACKDROP_WALL_Z);
     const floor=new THREE.Mesh(new THREE.PlaneGeometry(240,112),this.material);
     floor.rotation.x=-Math.PI/2;floor.position.set(0,floorY,44);
     this.root.add(wall,floor);

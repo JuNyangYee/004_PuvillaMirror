@@ -215,6 +215,12 @@ export class Overlay {
     lighting.add(cfg.scene, 'envLight', 0, 1.5, .01).name('환경 반사').onChange(onS);
     lighting.add({reset:()=>{resetLightDirections(cfg.scene.lightDirections);onS();this.requestSave();}},'reset').name('조명 위치 초기화');
     lighting.close();
+    // 그릴 때마다 값을 읽으므로 따로 적용 호출 없음
+    const snow = this.gui.addFolder("겨울 배경 눈");
+    snow.add(cfg.scene.snow, "enabled").name("눈 내리기");
+    snow.add(cfg.scene.snow, "amount", 0, 2, .05).name("양 (×)");
+    snow.add(cfg.scene.snow, "speed", .2, 2, .05).name("속도 (×)");
+    snow.close();
 
     const f5 = this.gui.addFolder("카메라·트래커 (재시작 필요)");
     if (import.meta.env.DEV) f5.add(cfg.camera, "deviceLabelIncludes").name("카메라 이름 (빈칸=기본)");

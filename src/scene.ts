@@ -10,6 +10,7 @@ import {GroundedBackdrop} from "./groundedBackdrop";
 import {applyCameraView, CAMERA_FOV} from "./cameraView";
 import type {Backdrop} from "./backdrop";
 import {lightPosition} from "./lighting";
+import {Snowfall} from "./snowfall";
 
 /** 시야각 18° (망원 — 원근 왜곡 적게, 가이드 3D 렌더 느낌) */
 const CAM_FOV = CAMERA_FOV;
@@ -25,6 +26,7 @@ export class Scene {
   private lights!: { key: THREE.DirectionalLight; fill: THREE.DirectionalLight; rim: THREE.DirectionalLight; hemi: THREE.HemisphereLight };
 
   private grounded:GroundedBackdrop;
+  private snow:Snowfall;
   private winterLighting = true;
   syncBackdrop(backdrop:Backdrop):void{
     backdrop.setWorldRendered(true);
@@ -67,6 +69,8 @@ export class Scene {
     this.scene.add(this.characterOutput);
     this.grounded=new GroundedBackdrop(ch.modelScale,ch.focusYcm);
     this.scene.add(this.grounded.root);
+    this.snow=new Snowfall(ch.modelScale,ch.focusYcm,cfg.snow);
+    this.scene.add(this.snow.points);
     // 폰·태블릿은 MSAA 끔 (픽셀 밀도가 높아 계단이 덜 보이고 부하는 큼)
     this.renderer = new THREE.WebGLRenderer({ antialias: !lightMobile(), alpha: true, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -173,6 +177,8 @@ export class Scene {
 
   render(): void {
     this.characterOutput.scale.x = this.cfg.outputMirror ? -1 : 1;
+    // 눈은 겨울 사진 배경과 같이 장면에 그려져 유화 켜짐/꺼짐 모두 같은 원본 렌더를 탄다
+    this.snow.show(this.grounded.root.visible, !!this.filterCfg?.oil?.enabled);
     if (this.filterCfg?.oil?.enabled) {
       this.oil ??= new OilStrokeFilter(
         this.renderer, this.scene, this.camera, this.filterCfg.oil, { top: this.cfg.bgTop, bottom: this.cfg.bgBottom },

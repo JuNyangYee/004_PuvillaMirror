@@ -330,6 +330,8 @@ export interface Config {
     /** Keep the character centered when fitting a narrower screen to arm width. */
     centerLongScreens: boolean;
     pViewOffsetXcm: number;
+    /** 겨울 배경에만 내리는 눈: 켜기 · 양(×, 0~2) · 떨어지는 속도(×) */
+    snow: { enabled: boolean; amount: number; speed: number };
   };
   /** 의상: classic = 기존 줄무늬 스카프 / christmas = 뜨개 목도리(새 FBX). 오른쪽 아래 아이콘으로 전환 */
   outfit: {
@@ -620,6 +622,7 @@ export const DEFAULT_CONFIG: Config = {
     lightDirections: structuredClone(DEFAULT_LIGHT_DIRECTIONS),
     layout: "portrait", outputMirror: false, aspect: 9 / 16, viewCenterCm: 133, viewHeightCm: 90, viewOffsetXcm: 0,
     pViewCenterCm: 95, pViewHeightCm: 250, pViewOffsetXcm: 0, centerLongScreens: false,
+    snow: { enabled: true, amount: 1, speed: 1 },
   },
   outfit: {
     style: "christmas", // 고정: 서 있는 푸빌라 + 뜨개 목도리
