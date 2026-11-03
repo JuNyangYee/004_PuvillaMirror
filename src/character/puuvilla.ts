@@ -986,9 +986,8 @@ export class PuuvillaCharacter implements CharacterRig {
       wave = ph > 1.0 && ph < 2.9 ? Math.sin(((ph - 1.0) / 1.9) * Math.PI) : 0;
     }
     wave = Math.max(wave, this.debugWave);
-    const breath = Math.sin(timeSec * Math.PI * 2 * ch.idleBreathHz) * ch.idleBreathAmp;
     this.root.position.y = baseY;
-    this.root.scale.set(1 + breath * 0.5, 1 + breath, 1 + breath * 0.5);
+    this.root.scale.setScalar(1);
 
     // ── 머리 (절대 회전) ──
     const yaw = mimic ? c.headYaw : 0;
