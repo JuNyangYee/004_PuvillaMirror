@@ -1,6 +1,7 @@
 import type {Config} from './config';
 import type {Scene} from './scene';
 import type {Backdrop} from './backdrop';
+import {orbitAngles,resetCameraView} from './cameraView';
 const ICON_FULL =
   '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
 const ICON_EXIT_FULL =
@@ -134,7 +135,7 @@ export function setupViewControls(full:Config,scene:Scene,onChange:()=>void,back
   // ── 확대·축소·이동 ──
   const el = scene.renderer.domElement;
   el.style.touchAction = "none";
-  const pts = new Map<number, { x: number; y: number }>();
+  const pts = new Map<number, { x: number; y: number; pan: boolean }>();
   let saveTimer = 0;
   const save = () => {
     clearTimeout(saveTimer);
@@ -150,15 +151,25 @@ export function setupViewControls(full:Config,scene:Scene,onChange:()=>void,back
     scene.setView({ ...v, height: v.height / factor });
   };
 
-  el.addEventListener("pointerdown", (e) => {
+  el.title = '좌클릭 드래그: 회전 · 휠클릭 드래그: 이동 · 휠: 확대/축소 · R: 시점 초기화';
+  el.addEventListener('pointerdown', e => {
+    if(e.pointerType==='mouse' && e.button!==0 && e.button!==1)return;
+    e.preventDefault();
     el.setPointerCapture(e.pointerId);
-    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    pts.set(e.pointerId, {x:e.clientX,y:e.clientY,pan:e.button===1});
+  });
+  el.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});
+  window.addEventListener('keydown',e=>{
+    if(e.key.toLowerCase()!=='r'||e.repeat||e.isComposing||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey)return;
+    if(e.target instanceof HTMLElement&&(e.target.isContentEditable||e.target.closest('input,textarea,select')))return;
+    e.preventDefault();pts.clear();resetCameraView(cfg);scene.resize();save();
   });
   el.addEventListener("pointermove", (e) => {
     const p = pts.get(e.pointerId);
     if (!p) return;
     if (pts.size === 1) {
-      pan(e.clientX - p.x, e.clientY - p.y);
+      if(p.pan)pan(e.clientX-p.x,e.clientY-p.y);
+      else {Object.assign(cfg,orbitAngles(cfg.cameraYawDeg,cfg.cameraTiltDeg,e.clientX-p.x,e.clientY-p.y));scene.resize();}
     } else if (pts.size === 2) {
       const [a, b] = [...pts.entries()];
       const other = a[0] === e.pointerId ? b[1] : a[1];
@@ -175,6 +186,7 @@ export function setupViewControls(full:Config,scene:Scene,onChange:()=>void,back
   const up = (e: PointerEvent) => pts.delete(e.pointerId);
   el.addEventListener("pointerup", up);
   el.addEventListener("pointercancel", up);
+  el.addEventListener("lostpointercapture", up);
   el.addEventListener(
     "wheel",
     (e) => {

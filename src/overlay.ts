@@ -1,4 +1,5 @@
 import GUI from "lil-gui";
+import {resetCameraView, ORBIT_LIMITS} from "./cameraView";
 import { downloadConfig, saveConfig, type Config } from "./config";
 import type { FaceSignal } from "./signals";
 import type { StateSnapshot } from "./state";
@@ -176,12 +177,14 @@ export class Overlay {
     fv.add(cfg.scene, "pViewCenterCm", 20, 220, 0.5).name("시점 높이 (cm)").onChange(onS).listen();
     fv.add(cfg.scene, "pViewHeightCm", 25, 260, 0.5).name("줌 (보이는 높이 cm)").onChange(onS).listen();
     fv.add(cfg.scene, "pViewOffsetXcm", -80, 80, 0.5).name("좌우 이동 (cm)").onChange(onS).listen();
-    fv.add(cfg.scene, "cameraTiltDeg", -30, 30, 0.5).name("카메라 위아래 각 (°, −=내려다봄)").onChange(onS);
+    fv.add(cfg.scene, "cameraYawDeg", -ORBIT_LIMITS.yaw, ORBIT_LIMITS.yaw, 0.5).name("좌우 회전 (°)").onChange(onS).listen();
+    fv.add({reset:()=>{resetCameraView(cfg.scene);onS();this.requestSave();}}, "reset").name("시점 초기화 (R)");
+    fv.add(cfg.scene, "cameraTiltDeg", ORBIT_LIMITS.tiltMin, ORBIT_LIMITS.tiltMax, 0.5).name("카메라 위아래 각 (°, −=내려다봄)").onChange(onS).listen();
     fv.add({
       copy: () => {
         const r = (x: number) => Math.round(x * 10) / 10;
         const sc = cfg.scene;
-        const v = { pViewCenterCm: r(sc.pViewCenterCm), pViewHeightCm: r(sc.pViewHeightCm), pViewOffsetXcm: r(sc.pViewOffsetXcm), cameraTiltDeg: sc.cameraTiltDeg, aspect: "9:16" };
+        const v = { pViewCenterCm: r(sc.pViewCenterCm), pViewHeightCm: r(sc.pViewHeightCm), pViewOffsetXcm: r(sc.pViewOffsetXcm), cameraTiltDeg: sc.cameraTiltDeg, cameraYawDeg: sc.cameraYawDeg, aspect: "9:16" };
         const text = `푸빌라 시점 ${JSON.stringify(v)}`;
         navigator.clipboard?.writeText(text).then(
           () => this.toast("시점 값 복사됨 — 채팅에 붙여 넣으면 기본값으로 배포"),

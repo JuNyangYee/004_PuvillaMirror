@@ -10,6 +10,11 @@ export class Backdrop{
   readonly canvas=document.createElement('canvas');
   private tex:THREE.CanvasTexture|null=null;
   private image:HTMLImageElement|null=null;
+  private worldTex:THREE.Texture|null=null;
+  private worldRendered=false;
+  get worldTexture(){return this.usesImage?this.worldTex:null;}
+  get imageAspect(){return this.image?this.image.naturalWidth/this.image.naturalHeight:16/9;}
+  setWorldRendered(on:boolean){this.worldRendered=on;this.canvas.style.display=on?"none":this.usesImage&&this.drawn?"block":"none";}
   private loading:Promise<void>|null=null;
   private drawn=false;
   style:BgStyle='winter';
@@ -22,7 +27,7 @@ export class Backdrop{
     void this.set(this.style,false);
   }
   get usesImage(){return this.style==='winter';}
-  get texture():THREE.Texture|null{return this.usesImage&&this.drawn?this.tex:null;}
+  get texture():THREE.Texture|null{return !this.worldRendered&&this.usesImage&&this.drawn?this.tex:null;}
   // The reference image already contains its trees; no extra foreground branches.
   frontTexture():THREE.Texture|null{return null;}
   setFrontBaked(_on:boolean):void{}
@@ -35,13 +40,14 @@ export class Backdrop{
   private load():Promise<void>{
     this.loading??=new Promise<void>(resolve=>{
       const image=new Image();image.decoding='async';
-      image.onload=()=>{this.image=image;resolve();};
+      image.onload=()=>{this.image=image;this.worldTex=new THREE.Texture(image);this.worldTex.colorSpace=THREE.SRGBColorSpace;this.worldTex.needsUpdate=true;resolve();};
       image.onerror=()=>{console.warn('[backdrop] Winter image could not be loaded');this.loading=null;resolve();};
       image.src=assetUrl('./bg/winter-village-reference.png');
     });
     return this.loading;
   }
   draw():void{
+    if(this.worldRendered){this.canvas.style.display="none";this.onChange?.();return;}
     if(this.usesImage&&this.image){
       const {width:W,height:H}=portraitViewport(innerWidth,innerHeight);
       if(!W||!H)return;
@@ -57,7 +63,7 @@ export class Backdrop{
       g.drawImage(im,(cw-width)/2,(ch-height)/2,width,height);
       this.tex.needsUpdate=true;this.drawn=true;
     }
-    this.canvas.style.display=this.usesImage&&this.drawn?'block':'none';
+    this.canvas.style.display=!this.worldRendered&&this.usesImage&&this.drawn?'block':'none';
     this.onChange?.();
   }
   next():BgStyle{const next=this.usesImage?'orange':'winter';void this.set(next);return next;}

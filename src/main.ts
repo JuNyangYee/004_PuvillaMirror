@@ -101,9 +101,9 @@ async function main(): Promise<void> {
   const backdrop = new Backdrop({ top: cfg.scene.bgTop, bottom: cfg.scene.bgBottom });
   if (backdrop) {
     scene.backdrop = backdrop;
-    scene.setWinterLighting(backdrop.usesImage);
+    scene.syncBackdrop(backdrop);
     backdrop.onChange = () => {
-      scene.setWinterLighting(backdrop.usesImage);
+      scene.syncBackdrop(backdrop);
       if (scene.ready) scene.render();
     };
   }

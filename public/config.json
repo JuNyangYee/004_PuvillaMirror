@@ -207,10 +207,11 @@
     "viewCenterCm": 133,
     "viewHeightCm": 90,
     "viewOffsetXcm": 0,
-    "pViewCenterCm": 133,
+    "pViewCenterCm": 95,
     "pViewHeightCm": 250,
     "pViewOffsetXcm": 0,
-    "centerLongScreens": true
+    "centerLongScreens": true,
+    "cameraYawDeg": 0
   },
   "filter": {
     "enabled": false,

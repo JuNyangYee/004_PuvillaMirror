@@ -6,9 +6,12 @@ import { lightMobile } from "./mobile";
 import { PaintFilter } from "./paintFilter";
 import { OilStrokeFilter } from "./oilFilter";
 import {portraitViewport, PORTRAIT_ASPECT} from "./presentation";
+import {GroundedBackdrop} from "./groundedBackdrop";
+import {applyCameraView, CAMERA_FOV} from "./cameraView";
+import type {Backdrop} from "./backdrop";
 
 /** 시야각 18° (망원 — 원근 왜곡 적게, 가이드 3D 렌더 느낌) */
-const CAM_FOV = 18;
+const CAM_FOV = CAMERA_FOV;
 
 /** 렌더러·카메라·조명. 세로 디스플레이(거울 프레임) 기준 레이아웃. */
 export class Scene {
@@ -20,7 +23,13 @@ export class Scene {
   private onLost: (() => void) | null = null;
   private lights!: { key: THREE.DirectionalLight; fill: THREE.DirectionalLight; rim: THREE.DirectionalLight; hemi: THREE.HemisphereLight };
 
+  private grounded:GroundedBackdrop;
   private winterLighting = true;
+  syncBackdrop(backdrop:Backdrop):void{
+    backdrop.setWorldRendered(true);
+    this.grounded.setTexture(backdrop.worldTexture,backdrop.imageAspect);
+    this.setWinterLighting(backdrop.usesImage);
+  }
   setWinterLighting(on:boolean):void{
     this.winterLighting=on;this.applyLighting();
   }
@@ -52,6 +61,8 @@ export class Scene {
 
   constructor(container: HTMLElement, private cfg: Config["scene"], private ch: Config["character"], private filterCfg?: Config["filter"]) {
     this.scene.add(this.characterOutput);
+    this.grounded=new GroundedBackdrop(ch.modelScale,ch.focusYcm);
+    this.scene.add(this.grounded.root);
     // 폰·태블릿은 MSAA 끔 (픽셀 밀도가 높아 계단이 덜 보이고 부하는 큼)
     this.renderer = new THREE.WebGLRenderer({ antialias: !lightMobile(), alpha: true, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -151,18 +162,7 @@ export class Scene {
     if (resized) this.renderer.setSize(W, H, false);
     this.camera.aspect = PORTRAIT_ASPECT;
     this.camera.fov = CAM_FOV;
-    const s = this.ch.modelScale, v = this.view();
-    const visH = v.height;
-    const bottom = v.center - v.height / 2;
-    const t = Math.tan(((CAM_FOV / 2) * Math.PI) / 180);
-    const dist = ((visH / 2) * s) / t;
-    const cx = v.offsetX * s;
-    const cy = ((this.cfg.centerLongScreens ? v.center : bottom + visH / 2) - this.ch.focusYcm) * s;
-    // 음수 각이면 위에서 살짝 내려다봄 → 앞으로 나온 코가 화면에서 내려가 눈과 떨어져 보인다 (가이드 렌더 구도)
-    const tilt = (this.cfg.cameraTiltDeg * Math.PI) / 180;
-    this.camera.position.set(cx, cy - dist * Math.sin(tilt), dist * Math.cos(tilt));
-    this.camera.lookAt(cx, cy, 0);
-    this.camera.updateProjectionMatrix();
+    applyCameraView(this.camera,this.cfg,this.ch.modelScale,this.ch.focusYcm);
     // 크기가 바뀌어 캔버스가 비었으면 다음 프레임을 기다리지 않고 바로 다시 그림
     if (resized && this.ready) this.render();
   }

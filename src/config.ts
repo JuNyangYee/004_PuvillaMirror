@@ -304,6 +304,7 @@ export interface Config {
     exposure: number;
     /** 카메라 위아래 각(°): − = 위에서 살짝 내려다봄 (가이드 3D 렌더 구도 — 코가 눈에서 떨어져 보임) */
     cameraTiltDeg: number;
+    cameraYawDeg: number;
     /** 조명 세기: 키(오른쪽 위 앞)·필(왼쪽 앞)·림(뒤)·하늘/바닥 반구·환경 반사. 털이 255 로 날아가지 않게 (가이드 2.4 밝기 분포 기준) */
     keyLight: number;
     fillLight: number;
@@ -611,10 +612,10 @@ export const DEFAULT_CONFIG: Config = {
     armFollowPose: true,
   },
   scene: {
-    bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 0.88, cameraTiltDeg: -6,
+    bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 0.88, cameraTiltDeg: -6, cameraYawDeg: 0,
     keyLight: 1.4, fillLight: 0.55, rimLight: 1.1, hemiLight: 0.8, envLight: 0.3,
     layout: "portrait", outputMirror: false, aspect: 9 / 16, viewCenterCm: 133, viewHeightCm: 90, viewOffsetXcm: 0,
-    pViewCenterCm: 153.5, pViewHeightCm: 123, pViewOffsetXcm: 0, centerLongScreens: false,
+    pViewCenterCm: 95, pViewHeightCm: 250, pViewOffsetXcm: 0, centerLongScreens: false,
   },
   outfit: {
     style: "christmas", // 고정: 서 있는 푸빌라 + 뜨개 목도리
@@ -653,7 +654,7 @@ const localMode = isEmbedded || !import.meta.env.DEV;
 let deployed: Config | null = null;
 /** 화면 시점(가로·세로 확대·이동·방향)은 보는 사람 손에 따라 바뀌는 값 — 개발 서버에서 휠·끌기로 바꿔도 공용 config.json 엔 안 씀
  *  (예전에 확인하느라 축소한 세로 시점이 저장·배포돼 폰에서 곰이 작게 공중에 떠 보였음). 기본 시점은 config.json 을 직접 고쳐서 바꿈. */
-const VIEW_KEYS = ["layout", "outputMirror", "viewCenterCm", "viewHeightCm", "viewOffsetXcm", "pViewCenterCm", "pViewHeightCm", "pViewOffsetXcm"] as const;
+const VIEW_KEYS = ["cameraYawDeg", "cameraTiltDeg", "layout", "outputMirror", "viewCenterCm", "viewHeightCm", "viewOffsetXcm", "pViewCenterCm", "pViewHeightCm", "pViewOffsetXcm"] as const;
 let fileView: Record<string, unknown> | null = null;
 
 function diff(cur: unknown, base: unknown): unknown {
