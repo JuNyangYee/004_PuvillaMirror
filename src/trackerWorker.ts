@@ -5,6 +5,7 @@
  */
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { toRawFaces } from "./tracker";
+import type { InferenceRegion } from "./inferenceRegion";
 import { FaceRecovery, type FaceHint } from "./faceRecovery";
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -21,7 +22,7 @@ type InitMsg = {
   transpose: boolean;
   options: Record<string, unknown>;
 };
-type FrameMsg = { type: "frame"; bitmap: ImageBitmap; ts: number; epoch: number; hint?: FaceHint | null };
+type FrameMsg = { type: "frame"; bitmap: ImageBitmap; ts: number; epoch: number; hint?: FaceHint | null; region?:InferenceRegion|null; debugLandmarks?:boolean };
 
 self.onmessage = async (e: MessageEvent<InitMsg | FrameMsg>) => {
   const d = e.data;
@@ -45,14 +46,15 @@ self.onmessage = async (e: MessageEvent<InitMsg | FrameMsg>) => {
     const t0 = performance.now();
     try {
       if (!landmarker) throw new Error("not ready");
-      if (inputEpoch !== d.epoch) { recovery.reset(); inputEpoch = d.epoch; }
-      const faces = recovery.run(d.bitmap, d.ts, (image, ts) => {
+      if (inputEpoch !== d.epoch) { recovery.reset(); if(inputEpoch>=0&&d.region)await landmarker.setOptions({numFaces:1}); inputEpoch = d.epoch; }
+      const detect = (image: HTMLCanvasElement|HTMLVideoElement|ImageBitmap|OffscreenCanvas, ts:number) => {
         const res = landmarker!.detectForVideo(image, ts);
         const width = "videoWidth" in image ? image.videoWidth : image.width;
         const height = "videoHeight" in image ? image.videoHeight : image.height;
-        return toRawFaces(res, width, height, transpose);
-      }, d.hint);
-      self.postMessage({ type: "result", faces, inferenceMs: performance.now() - t0, epoch: d.epoch, ts: d.ts });
+        return toRawFaces(res, width, height, transpose,d.debugLandmarks);
+      };
+      const faces = recovery.run(d.bitmap,d.ts,detect,d.hint);
+      self.postMessage({ type: "result", faces, inferenceMs: performance.now() - t0, epoch: d.epoch, ts: d.ts, region:d.region });
     } catch (err) {
       self.postMessage({ type: "result", faces: null, inferenceMs: 0, msg: String(err), epoch: d.epoch });
     } finally {

@@ -53,6 +53,8 @@ for (const p of EMBED) {
     // 다른 PC·다른 카메라: 이 PC 에 맞춘 수동 노출을 강제하지 않고 카메라 자동 노출로 시작 (그 PC 에서 슬라이더로 조정 → 그 브라우저에 저장)
     const c = JSON.parse(b.toString("utf8"));
     c.camera = { ...c.camera, applyImageSettings: false, autoExposure: true };
+    // YOLO uses a module worker and local ONNX assets: use the server/portable build for it.
+    c.person = {...c.person,enabled:false};
     b = Buffer.from(JSON.stringify(c), "utf8");
   }
   parts.push(`${JSON.stringify(p)}:"${b.toString("base64")}"`);

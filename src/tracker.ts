@@ -4,6 +4,7 @@ import * as THREE from "three";
 import type { Config } from "./config";
 import { log } from "./logger";
 import { FaceRecovery, type FaceHint } from "./faceRecovery";
+import { remapFace, type InferenceRegion } from "./inferenceRegion";
 import { WorkerInferenceHealth } from "./workerHealth";
 
 /** 한 얼굴에서 뽑은 raw 신호 (스무딩 전) */
@@ -23,6 +24,7 @@ export interface RawFace {
    * MediaPipe 블렌드셰이프(jawOpen·mouthFrown)는 고개 각도에 흔들리고 frown 이 거의 안 잡혀서 이걸 주로 쓴다.
    */
   mouth: { open: number; corner: number };
+  landmarks?: {x:number;y:number;z:number}[];
   /**
    * 랜드마크로 잰 눈 뜬 정도 (눈꺼풀 위–아래 간격 3쌍 평균 / 눈 폭). left/right = 본인 기준 (블렌드셰이프와 같음).
    * MediaPipe eyeBlink 블렌드셰이프는 한쪽만 감아도 양쪽이 같이 올라가서 윙크 구분이 안 된다.
@@ -51,6 +53,7 @@ export class FaceTracker {
   private workerHealth = new WorkerInferenceHealth();
   private lastUpdateAt = -Infinity;
   private closed = false;
+  private graphReset:Promise<void>|null=null;
   private falling = false;
   private inputEpoch = 0;
   private recovery = new FaceRecovery();
@@ -139,7 +142,7 @@ export class FaceTracker {
       this.busy = false;
       if (d.epoch !== this.inputEpoch) return;
       if (d.faces) {
-        this.lastResult = { faces: d.faces as RawFace[], inferenceMs: d.inferenceMs, observedAtMs: d.ts };
+        this.lastResult = { faces: d.region ? d.faces.map((f:RawFace)=>remapFace(f,d.region)) : d.faces as RawFace[], inferenceMs: d.inferenceMs, observedAtMs: d.ts };
         const now = performance.now();
         if (typeof document !== "undefined" && document.hidden) this.workerHealth.reset(now);
         else if (this.workerHealth.observe(d.inferenceMs, now))
@@ -176,8 +179,8 @@ export class FaceTracker {
   }
 
   /** 매 렌더 프레임에 호출. 새 비디오 프레임일 때만 추론. */
-  update(video: HTMLVideoElement, nowMs: number, input: HTMLCanvasElement | HTMLVideoElement = video, hint: FaceHint | null = null): TrackResult {
-    if ((!this.landmarker && !this.worker) || video.readyState < 2) return this.lastResult;
+  update(video: HTMLVideoElement, nowMs: number, input: HTMLCanvasElement | HTMLVideoElement = video, hint: FaceHint | null = null, region:InferenceRegion|null=null, debugLandmarks=false): TrackResult {
+    if (this.graphReset || (!this.landmarker && !this.worker) || video.readyState < 2) return this.lastResult;
     if (nowMs - this.lastUpdateAt > 1000 || (typeof document !== "undefined" && document.hidden))
       this.workerHealth.reset(nowMs);
     this.lastUpdateAt = nowMs;
@@ -198,7 +201,7 @@ export class FaceTracker {
           if (w === this.worker) this.busy = false;
           return;
         }
-        try { w.postMessage({ type: "frame", bitmap, ts: nowMs, epoch, hint }, [bitmap]); }
+        try { w.postMessage({ type: "frame", bitmap, ts: nowMs, epoch, hint, region, debugLandmarks }, [bitmap]); }
         catch (e) { bitmap.close(); this.fallBackToMain(String(e)); }
       }, () => { if (w === this.worker) this.busy = false; });
       return this.lastResult;
@@ -208,12 +211,14 @@ export class FaceTracker {
     const t0 = performance.now();
     let faces: RawFace[];
     try {
-      faces = this.recovery.run(input, nowMs, (image, ts) => {
+      const detect = (image: HTMLCanvasElement|HTMLVideoElement|ImageBitmap|OffscreenCanvas, ts:number) => {
         const res = this.landmarker!.detectForVideo(image, ts);
         const width = "videoWidth" in image ? image.videoWidth : image.width;
         const height = "videoHeight" in image ? image.videoHeight : image.height;
-        return toRawFaces(res, width, height, this.cfg.transposeMatrix);
-      }, hint);
+        return toRawFaces(res, width, height, this.cfg.transposeMatrix,debugLandmarks);
+      };
+      faces = this.recovery.run(input,nowMs,detect,hint);
+      if(region)faces=faces.map(f=>remapFace(f,region));
     } catch (e) {
       log.error("tracker", `detectForVideo 실패: ${String(e)}`);
       return this.lastResult;
@@ -225,6 +230,7 @@ export class FaceTracker {
   }
 
   resetInput(): void {
+    if(this.landmarker&&!this.graphReset){this.graphReset=this.landmarker.setOptions({numFaces:this.cfg.numFaces}).catch(e=>log.error("tracker",String(e))).finally(()=>{this.graphReset=null;});}
     this.recovery.reset();
     this.workerHealth.reset(performance.now());
     this.inputEpoch++;
@@ -246,7 +252,7 @@ export class FaceTracker {
 
 
 /** MediaPipe 결과 → RawFace[] (메인 스레드·워커 공용) */
-export function toRawFaces(res: FaceLandmarkerResult, vw: number, vh: number, transpose: boolean): RawFace[] {
+export function toRawFaces(res: FaceLandmarkerResult, vw: number, vh: number, transpose: boolean, debugLandmarks=false): RawFace[] {
   const faces: RawFace[] = [];
   for (let i = 0; i < res.faceLandmarks.length; i++) {
     const lm = res.faceLandmarks[i];
@@ -278,6 +284,7 @@ export function toRawFaces(res: FaceLandmarkerResult, vw: number, vh: number, tr
     faces.push({
       bbox: { x: minX, y: minY, w, h, cx: minX + w / 2, cy: minY + h / 2 },
       yaw, pitch, roll, blend,
+      landmarks: debugLandmarks ? lm.map(p=>({x:p.x,y:p.y,z:p.z})) : undefined,
       mouth: measureMouth(lm, vw, vh),
       eyes: measureEyes(lm, vw, vh),
     });

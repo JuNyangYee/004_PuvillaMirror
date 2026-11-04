@@ -154,7 +154,7 @@ export function sameFaceBox(a: RawFace, b: RawFace): boolean {
 
 export function remapRecoveryFace(face: RawFace, crop: Crop, width: number, height: number): RawFace {
   const b = face.bbox;
-  return { ...face, bbox: {
+  return { ...face, landmarks: face.landmarks?.map(p=>({x:(crop.x+p.x*crop.size)/width,y:(crop.y+p.y*crop.size)/height,z:p.z*crop.size/width})), bbox: {
     x: (crop.x + b.x * crop.size) / width, y: (crop.y + b.y * crop.size) / height,
     w: b.w * crop.size / width, h: b.h * crop.size / height,
     cx: (crop.x + b.cx * crop.size) / width, cy: (crop.y + b.cy * crop.size) / height,

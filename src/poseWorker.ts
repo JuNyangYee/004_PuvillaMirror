@@ -1,10 +1,12 @@
 /// <reference lib="webworker" />
 import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
+import type {InferenceRegion} from "./inferenceRegion";
 import type { Config } from "./config";
 declare const self: DedicatedWorkerGlobalScope;
 let landmarker: PoseLandmarker | null = null;
+let inputEpoch=-1;
 type Init = { type: "init"; cfg: Config["pose"]; modelPath: string; wasmPath: string };
-type Frame = { type: "frame"; bitmap: ImageBitmap; ts: number; epoch: number };
+type Frame = { type: "frame"; bitmap: ImageBitmap; ts: number; epoch: number; region?:InferenceRegion|null };
 self.onmessage = async ({ data: d }: MessageEvent<Init | Frame>) => {
   if (d.type === "init") {
     try {
@@ -25,17 +27,18 @@ self.onmessage = async ({ data: d }: MessageEvent<Init | Frame>) => {
   }
   const start = performance.now();
   try {
+    if(inputEpoch!==d.epoch){if(inputEpoch>=0&&d.region)await landmarker!.setOptions({numPoses:1});inputEpoch=d.epoch;}
     const res = landmarker!.detectForVideo(d.bitmap, d.ts);
     const poses = res.worldLandmarks.map((world, i) => {
       const lm = res.landmarks[i];
       return {
         world: world.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility ?? 0 })),
-        image: lm.map(p => ({ x: p.x, y: p.y })), imageAspect: d.bitmap.width / d.bitmap.height,
+        image: lm.map(p => ({ x: p.x, y: p.y, visibility:p.visibility??0 })), imageAspect: d.bitmap.width / d.bitmap.height,
         nose: { x: lm[0].x, y: lm[0].y },
         shoulderW: Math.hypot(lm[11].x - lm[12].x, lm[11].y - lm[12].y),
       };
     });
-    self.postMessage({ type: "result", poses, ts: d.ts, epoch: d.epoch, inferenceMs: performance.now() - start });
+    self.postMessage({ type: "result", poses, ts: d.ts, epoch: d.epoch, region:d.region, inferenceMs: performance.now() - start });
   } catch {
     self.postMessage({ type: "result", poses: null, ts: d.ts, epoch: d.epoch });
   } finally { d.bitmap.close(); }

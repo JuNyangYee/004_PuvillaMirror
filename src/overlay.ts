@@ -37,13 +37,33 @@ export class Overlay {
   private statsEl: HTMLElement;
   private visible = true;
 
-  constructor(private cfg: Config, hooks: { onSmoothingChange: () => void; onCharacterChange: () => void; onSceneChange: () => void; onFaceNeutral?: () => void }) {
+  constructor(private cfg: Config, hooks: { onSmoothingChange: () => void; onCharacterChange: () => void; onSceneChange: () => void; onFaceNeutral?: () => void; onRecognitionRestart?:()=>void }) {
     this.statsEl = document.getElementById("stats")!;
     this.gui = new GUI({ title: "푸빌라 설정 · D로 닫기", width: 360 });
     const onC = hooks.onCharacterChange;
 
+    const vision=this.gui.addFolder('인식 설정 — YOLO · MediaPipe');
+    vision.add(cfg.person,'enabled').name('YOLO로 대상 1명 선택');
+    vision.add(cfg.person,'criterion',{'큰 사람 우선':'area','화면 아래쪽 사람 우선':'bottom'}).name('대상 선택 기준');
+    vision.add(cfg.person,'confidence',.15,.9,.05).name('사람 검출 신뢰도');
+    vision.add(cfg.person,'intervalMs',50,500,10).name('YOLO 검출 간격 (ms)');
+    vision.add(cfg.person,'padding',.05,.5,.05).name('입력 박스 여백 (비율)');
+    vision.add(cfg.person,'switchRatio',1.05,2,.05).name('대상 교체 크기 배율');
+    vision.add(cfg.person,'switchHoldMs',100,1500,50).name('새 대상 유지 후 교체 (ms)');
+    vision.add(cfg.person,'lostHoldMs',200,1000,50).name('사람 박스 소실 유예 (ms)');
+    vision.add(cfg.recognition,'confirmMs',150,1500,50).name('얼굴 연속 확인 후 시작 (ms)');
+    vision.add({retry:()=>hooks.onRecognitionRestart?.()},'retry').name('YOLO 다시 초기화');
+    const note=document.createElement('div');note.style.cssText='padding:6px 8px;font-size:11px;color:#abb8c8;line-height:1.5';
+    note.textContent='Face 1명 · Pose 1명 (내부 스무딩). 검출 박스에 여백을 더한 영상으로 인식합니다. 큰 사람 우선은 상체 화면용이며 실제 거리 측정은 아닙니다. 다른 사람이 박스 안에 겹치면 혼동할 수 있습니다.';
+    vision.$children.appendChild(note);vision.close();
+    const debug=this.gui.addFolder('카메라 인식 디버그');
+    debug.add(cfg.debugVision,'yoloBoxes').name('YOLO 사람 박스');
+    debug.add(cfg.debugVision,'inputRegion').name('MediaPipe 입력 범위');
+    debug.add(cfg.debugVision,'bodyPoints').name('몸 관절 · 연결선');
+    debug.add(cfg.debugVision,'faceLandmarks').name('얼굴 랜드마크');
+    debug.close();
     const f1 = this.gui.addFolder("접근 판정 — 언제 등장/퇴장할지");
-    f1.add(cfg.presence, "mimicOnLock").name("락온되면 바로 따라하기 (거리 제한 해제)");
+    f1.add(cfg.presence, "mimicOnLock").name("인식 확인 후 따라하기 (거리 제한 해제)");
     f1.add(cfg.presence, "enterBboxHeight", 0.05, 0.6, 0.005)
       .name("등장: 얼굴 크기 ≥ (입력 짧은 변 비율)");
     f1.add(cfg.presence, "exitBboxHeight", 0.03, 0.5, 0.005)
@@ -60,7 +80,7 @@ export class Overlay {
       .name("거리 제한 모드: 가운데 우선 정도");
     const hint = document.createElement("div");
     hint.style.cssText = "padding:4px 8px 8px;font-size:11px;line-height:1.4;color:#9aa0ad";
-    hint.textContent = "기본은 노란 영역 안에서 가장 큰 얼굴을 잡아 바로 따라한다. 잡은 사람은 크기가 조금 변해도 유지하고, 놓치면 다시 선택한다. '락온되면 바로 따라하기'를 끄면 얼굴 크기·중앙 범위·가운데 우선 조건을 추가로 적용한다. 노란 박스를 끌어 락온 영역을 옮기거나 크기를 바꿀 수 있다.";
+    hint.textContent = "노란 영역에 걸친 사람을 YOLO가 선택하고 얼굴을 연속 확인한 뒤 따라합니다. 거리 제한 모드에서는 얼굴 크기와 중앙 범위도 확인합니다. 노란 박스를 끌어 인식 허용 영역을 편집할 수 있습니다.";
     f1.$children.appendChild(hint);
 
     f1.close();

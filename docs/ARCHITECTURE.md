@@ -47,3 +47,37 @@
 - 위치·흔들림은 셰이더에서 계산하고 JS는 위상 하나만 진행한다. 원본 장면을 실제로 그릴 때(`onBeforeRender`)만 진행하므로 유화 필터의 초당 그림 수에 그대로 맞고 별도 루프가 없다. 모든 눈송이가 20분 주기 안에 정수 번 떨어지고 흔들려 주기가 넘어가도 이음매가 없다.
 - 유화는 붓 크기로 다시 칠해 큰 점이 속 빈 고리로 남으므로, 유화가 켜지면 원본 눈을 작고 또렷하게(×0.6) 그려 작은 붓 터치로 칠해지게 한다. 겨울 사진이 보일 때만 표시되고 주황 배경에서는 숨는다.
 - `scene.snow`: 켜기 · 양(×, 0~2, 기본 900개) · 속도(×). 설정 > 겨울 배경 눈. `npm run snowfall:check`는 실제 캐릭터 등보다 뒤·사진 벽보다 앞, 이음매 없는 주기, 표시 조건과 양을 확인한다.
+
+
+## YOLO person ROI (2026-11)
+
+- A local YOLO11n worker runs at most once per configured interval (100 ms default),
+  with one frame in flight. WebGPU preferred, worker WASM fallback. Errors/timeouts
+  stop acquisition and show a retry state; they do not silently track the full crowd.
+- PersonSelection ranks camera-normalized person boxes overlapping the mirrored
+  operator zone. Default area is a proximity heuristic for upper-body framing, not
+  a distance sensor. Bottom is optional for floor-visible views. A 30% larger
+  challenger must persist 450 ms; the current target has a 500 ms loss lease.
+- PersonCrop uses 20% padding per side, immediate expansion and eased contraction.
+  It preserves aspect and caps the long side at 960 px. Face and Pose both use one
+  person. Faces may use the selected pose's head region *within* this crop.
+- Every in-flight face/pose request carries its own ROI. Results are remapped to
+  full rotated camera coordinates at delivery, never using a newer ROI. Pose world
+  coordinates stay unchanged. Nested face-recovery landmarks are remapped too.
+- Selection revision/rotation resets cached observations, neutral calibration,
+  filters, MediaPipe tracking graph and presence confirmation. Old epoch responses
+  are ignored. Overlapping people inside one crop can still confuse a single-person
+  landmarker; no biometric identity or segmentation is claimed.
+- PresenceConfirmation requires at least 3 fresh matching face observations over
+  350 ms; a missing observation restarts acquisition. Held/cached results cannot
+  start a session. Existing face-loss grace sustains an acquired session.
+- Developer settings expose detector threshold/cadence, choice/switch policy,
+  ROI padding/loss grace and face-confirmation time. Independent preview toggles
+  draw YOLO candidates/selected box, actual input ROI, pose joints/edges and face
+  landmarks. All overlays use the rotated source coordinates and preview mirror.
+  Face point arrays are only transferred when that debug overlay is visible.
+- Offline YOLO/ORT assets are versioned in public/. Normal Vite/portable builds
+  include them. Legacy single-HTML export explicitly disables YOLO, retaining the
+  previous full-frame path; use a local server build for person ROI tracking.
+- Check: npm run person:roi:check. Covers switch/loss/mirror, arm expansion,
+  fresh-only acquisition, ROI/world-coordinate mapping, YOLO layout/NMS.

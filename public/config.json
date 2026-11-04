@@ -20,7 +20,7 @@
     "modelUrlFallback": "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
     "wasmPath": "./mediapipe/wasm",
     "delegate": "GPU",
-    "numFaces": 3,
+    "numFaces": 1,
     "minFaceDetectionConfidence": 0.35,
     "minFacePresenceConfidence": 0.3,
     "minTrackingConfidence": 0.3,
@@ -156,7 +156,7 @@
     "modelUrlFallback": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
     "delegate": "GPU",
     "everyNFrames": 1,
-    "numPoses": 3,
+    "numPoses": 1,
     "minDetectionConfidence": 0.5,
     "minPresenceConfidence": 0.5,
     "minTrackingConfidence": 0.5
@@ -274,5 +274,24 @@
     "style": "christmas",
     "sitBody": false,
     "seatBody": false
+  },
+  "person": {
+    "enabled": true,
+    "confidence": 0.4,
+    "intervalMs": 100,
+    "padding": 0.2,
+    "criterion": "area",
+    "switchRatio": 1.3,
+    "switchHoldMs": 450,
+    "lostHoldMs": 500
+  },
+  "recognition": {
+    "confirmMs": 350
+  },
+  "debugVision": {
+    "yoloBoxes": true,
+    "inputRegion": true,
+    "bodyPoints": false,
+    "faceLandmarks": false
   }
 }

@@ -1,4 +1,8 @@
 import { applyImageSettings, currentVideoTrack } from "./camera";
+import type {PersonBox} from "./personSelection";
+import type {InferenceRegion} from "./inferenceRegion";
+import type {RawPose} from "./poseTracker";
+import type {RawFace} from "./tracker";
 import type { Config } from "./config";
 
 export interface ZoneFace {
@@ -13,6 +17,8 @@ export interface ZoneFace {
   pending?: boolean;
 }
 
+export interface VisionDebug {boxes:PersonBox[];selected:PersonBox|null;region:InferenceRegion|null;poses:RawPose[];faces:RawFace[];status:string}
+const POSE_LINKS=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[15,17],[15,19],[16,18],[16,20]];
 type Mode = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw" | null;
 
 /**
@@ -231,7 +237,8 @@ export class LockZoneEditor {
     refresh();
   }
 
-  draw(faces: ZoneFace[]): void {
+  draw(faces: ZoneFace[],debug?:VisionDebug): void {
+    if(document.body.classList.contains("debug-hidden")||document.body.classList.contains("kiosk"))return;
     const c = this.canvas, g = this.ctx;
     const W = c.clientWidth, H = c.clientHeight;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -242,6 +249,26 @@ export class LockZoneEditor {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, W, H);
 
+    if(debug){
+      const flags=this.cfg.debugVision,mirror=this.cfg.camera.mirror;
+      const px=(x:number)=>(mirror?1-x:x)*W;
+      const box=(b:{x:number;y:number;w:number;h:number},color:string,label:string,dashed=false)=>{
+        const x=(mirror?1-b.x-b.w:b.x)*W,y=b.y*H;
+        g.strokeStyle=g.fillStyle=color;g.lineWidth=2;g.setLineDash(dashed?[5,3]:[]);
+        g.strokeRect(x,y,b.w*W,b.h*H);g.setLineDash([]);g.font='11px system-ui';g.fillText(label,x+3,Math.max(12,y+12));
+      };
+      if(flags.yoloBoxes)for(const b of debug.boxes)box(b,b===debug.selected?'#4eff8c':'#ff9b50','YOLO '+Math.round(b.score*100)+'%'+(b===debug.selected?' · 선택':''));
+      if(flags.inputRegion&&debug.region)box(debug.region,'#51d9ff','MediaPipe 입력',true);
+      if(flags.bodyPoints)for(const p of debug.poses){
+        const pts=p.image;if(!pts)continue;
+        const visible=(i:number)=>pts[i]&&Number.isFinite(pts[i].x)&&Number.isFinite(pts[i].y)&&(pts[i].visibility??p.world[i]?.visibility??0)>=this.cfg.body.minVisibility;
+        g.strokeStyle='#42e9d0';g.lineWidth=1.5;g.beginPath();
+        for(const [a,b] of POSE_LINKS)if(visible(a)&&visible(b)){g.moveTo(px(pts[a].x),pts[a].y*H);g.lineTo(px(pts[b].x),pts[b].y*H);}g.stroke();
+        g.fillStyle='#42e9d0';for(let i=0;i<pts.length;i++)if(visible(i)){g.beginPath();g.arc(px(pts[i].x),pts[i].y*H,2.3,0,Math.PI*2);g.fill();}
+      }
+      if(flags.faceLandmarks){g.fillStyle='#ff82e9';for(const face of debug.faces)for(const p of face.landmarks??[]){g.fillRect(px(p.x)-.7,p.y*H-.7,1.4,1.4);}}
+      g.fillStyle='rgba(0,0,0,.7)';g.fillRect(0,H-22,W,22);g.fillStyle='#fff';g.font='11px system-ui';g.fillText(debug.status,6,H-7,W-12);
+    }
     // 영역 밖 어둡게
     const z = this.cfg.presence.lockZone;
     g.fillStyle = "rgba(0,0,0,0.35)";

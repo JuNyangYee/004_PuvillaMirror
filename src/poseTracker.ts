@@ -1,13 +1,14 @@
 import { FilesetResolver, PoseLandmarker, type PoseLandmarkerResult } from "@mediapipe/tasks-vision";
 import { isEmbedded, visionFileset } from "./embedded";
 import type { Config } from "./config";
+import { remapPose, type InferenceRegion } from "./inferenceRegion";
 import { log } from "./logger";
 
 /** Pose 월드 랜드마크 1명분 (33개, m, 엉덩이 중심 원점, 축은 카메라 이미지 기준: x→오른쪽, y→아래, z→카메라에서 멀어짐) */
 export interface RawPose {
   world: { x: number; y: number; z: number; visibility: number }[];
   /** Normalized image positions: world coordinates can hallucinate an off-screen wrist. */
-  image?: { x: number; y: number }[];
+  image?: { x: number; y: number; visibility?: number }[];
   imageAspect?: number;
   /** 이미지 좌표(0~1, 미러 전) 코·어깨 — 얼굴 대상과 같은 사람인지 맞출 때 사용 */
   nose: { x: number; y: number };
@@ -34,6 +35,7 @@ export class PoseTracker {
   private busy = false;
   private pending = false;
   private epoch = 0;
+  private graphReset:Promise<void>|null=null;
   mode = "";
   modelSource = "";
 
@@ -86,7 +88,7 @@ export class PoseTracker {
       this.busy = false;
       // Do not revive a lock with a delayed frame or a pre-rotation result.
       if (data.epoch !== this.epoch || !data.poses || performance.now() - data.ts > 500) return;
-      this.last = { poses: data.poses, inferenceMs: data.inferenceMs, observedAtMs: data.ts, fresh: false };
+      this.last = { poses: data.region ? data.poses.map((p:RawPose)=>remapPose(p,data.region)) : data.poses, inferenceMs: data.inferenceMs, observedAtMs: data.ts, fresh: false };
       this.pending = true;
     };
     worker.onerror = e => {
@@ -107,7 +109,8 @@ export class PoseTracker {
     return this.cfg.modelUrlFallback;
   }
 
-  update(video: HTMLVideoElement, nowMs: number, input: HTMLCanvasElement | HTMLVideoElement = video): PoseResult {
+  update(video: HTMLVideoElement, nowMs: number, input: HTMLCanvasElement | HTMLVideoElement = video, region:InferenceRegion|null=null): PoseResult {
+    if(this.graphReset)return {...this.last,fresh:false};
     if (this.worker) {
       const result = { ...this.last, fresh: this.pending && nowMs - (this.last.observedAtMs ?? -Infinity) <= 500 };
       this.pending = false;
@@ -118,7 +121,7 @@ export class PoseTracker {
       this.busy = true;
       createImageBitmap(input).then(bitmap => {
         if (worker !== this.worker || epoch !== this.epoch) { bitmap.close(); this.busy = false; return; }
-        worker.postMessage({ type: "frame", bitmap, ts: nowMs, epoch }, [bitmap]);
+        worker.postMessage({ type: "frame", bitmap, ts: nowMs, epoch, region }, [bitmap]);
       }).catch(e => { this.busy = false; log.warn("pose", String(e)); });
       return result;
     }
@@ -140,14 +143,14 @@ export class PoseTracker {
       const lm = res.landmarks[i];
       return {
         world: w.map((p) => ({ x: p.x, y: p.y, z: p.z, visibility: p.visibility ?? 0 })),
-        image: lm.map((p) => ({ x: p.x, y: p.y })),
+        image: lm.map((p) => ({ x: p.x, y: p.y, visibility:p.visibility??0 })),
         imageAspect: "videoWidth" in input ? input.videoWidth/input.videoHeight : input.width/input.height,
         nose: { x: lm[0].x, y: lm[0].y },
         shoulderW: Math.hypot(lm[11].x - lm[12].x, lm[11].y - lm[12].y),
       };
     });
     this.last = {
-      poses,
+      poses: region ? poses.map(p=>remapPose(p,region)) : poses,
       inferenceMs: performance.now() - t0,
       fresh: true,
       observedAtMs: nowMs,
@@ -156,6 +159,7 @@ export class PoseTracker {
   }
 
   resetInput(): void {
+    if(this.landmarker&&!this.graphReset){this.graphReset=this.landmarker.setOptions({numPoses:this.cfg.numPoses}).catch(e=>log.error("pose",String(e))).finally(()=>{this.graphReset=null;});}
     this.epoch++;
     this.pending = false;
     this.last = { poses: [], inferenceMs: 0, fresh: false };

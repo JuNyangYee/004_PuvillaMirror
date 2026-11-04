@@ -38,7 +38,8 @@
     "pipeline:check": "node --experimental-transform-types scripts/check-inference-scheduling.mjs && node --experimental-transform-types scripts/check-render-preparation.mjs",
     "presentation:check": "node --experimental-transform-types scripts/check-presentation.mjs",
     "camera:view:check": "node --experimental-transform-types scripts/check-camera-view.mjs",
-    "snowfall:check": "node --experimental-transform-types scripts/check-snowfall.mjs"
+    "snowfall:check": "node --experimental-transform-types scripts/check-snowfall.mjs",
+    "person:roi:check": "node --experimental-transform-types scripts/check-person-roi.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.1.0",

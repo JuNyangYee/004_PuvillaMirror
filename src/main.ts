@@ -1,4 +1,9 @@
-import "./embedded"; // 단일 HTML 빌드면 내장 파일로 fetch 를 대신함 (가장 먼저)
+import "./embedded"; // Install embedded asset handling before other runtime modules.
+import {PersonTracker} from "./personTracker";
+import {PersonCrop} from "./inferenceRegion";
+import {faceInPerson} from "./personSelection";
+import {PresenceConfirmation} from "./presenceConfirmation";
+import type {PoseResult} from "./poseTracker";
 import { loadConfig, saveConfig } from "./config";
 import { describeCameraError, openCamera } from "./camera";
 import { CameraInput } from "./cameraInput";
@@ -35,6 +40,7 @@ async function main(): Promise<void> {
   const setBoot = (s: string) => (boot.textContent = s);
 
   const cfg = await loadConfig();
+  cfg.tracker.numFaces=1;cfg.pose.numPoses=1;
   const params = new URLSearchParams(location.search);
   const kiosk = isKiosk();
   const sim = params.get("sim") === "1" ? new SimInput(cfg) : null;
@@ -92,6 +98,11 @@ async function main(): Promise<void> {
   }
 
   const cameraInput = sim ? null : new CameraInput(video, cfg.camera);
+  const personTracker=new PersonTracker(cfg),personCrop=new PersonCrop(),confirmation=new PresenceConfirmation();
+  if(!sim&&cfg.person.enabled)personTracker.init();
+  let personRevision=personTracker.selection.revision;
+  let personEnabled=cfg.person.enabled;
+  let rawPose:PoseResult={poses:[],fresh:false,inferenceMs:0};
   let signals = new SignalProcessor(cfg);
   let bodyProc = new BodyProcessor(cfg);
   let bodyTarget = new BodyTargetLock(cfg);
@@ -130,6 +141,7 @@ async function main(): Promise<void> {
   const overlay = kiosk
     ? null
     : new Overlay(cfg, {
+        onRecognitionRestart: () => {personTracker.restart();},
         onFaceNeutral: () => signals.recalibrateNeutral(),
         onSmoothingChange: () => {
           signals.applySmoothingParams();
@@ -154,7 +166,7 @@ async function main(): Promise<void> {
   let snap = fsm.update(sig, performance.now());
   let body: BodyPose | null = null;
   (window as unknown as { __mimic: unknown }).__mimic = {
-    cfg, logs: () => log.entries(), signal: () => sig, state: () => snap, body: () => body, sim, scene, character, tracker,
+    cfg, personTracker, personCrop, rawPose:()=>rawPose, confirmation, logs: () => log.entries(), signal: () => sig, state: () => snap, body: () => body, sim, scene, character, tracker,
   };
   startHealthBeat(cfg.kiosk, () => ({ state: snap.state, faces: sig.faceCount, logs: log.entries().slice(-5) }));
 
@@ -178,33 +190,53 @@ async function main(): Promise<void> {
       tracker?.resetInput(); poseTracker?.resetInput();
       signals = new SignalProcessor(cfg); bodyProc = new BodyProcessor(cfg);
       bodyTarget = new BodyTargetLock(cfg); fsm = new MimicStateMachine(cfg);
+      personTracker.reset();personCrop.reset();confirmation.reset();
     }
-    const input = cameraInput?.canvas ?? video;
-    let poseMs = 0;
-    if (sim) body = sim.body(now / 1000);
-    else if (poseTracker) {
-      const pr = poseTracker.update(video, now, input);
-      poseMs = pr.inferenceMs;
-      const revision = bodyTarget.revision;
-      const selected = bodyTarget.update(pr.poses, signals.target, pr.fresh, now);
-      if (revision !== bodyTarget.revision) {
-        signals = new SignalProcessor(cfg); bodyProc = new BodyProcessor(cfg); tracker?.resetInput();
+    const fullInput = cameraInput?.canvas ?? video;
+    const usePerson=!sim&&cfg.person.enabled;
+    if(cameraInput)personTracker.update(cameraInput.canvas,video.currentTime,now);
+    if(personRevision!==personTracker.selection.revision||personEnabled!==cfg.person.enabled){
+      personRevision=personTracker.selection.revision;personEnabled=cfg.person.enabled;
+      tracker?.resetInput();poseTracker?.resetInput();personCrop.reset();confirmation.reset();
+      signals=new SignalProcessor(cfg);bodyProc=new BodyProcessor(cfg);bodyTarget=new BodyTargetLock(cfg);
+      fsm=new MimicStateMachine(cfg);body=null;rawPose={poses:[],fresh:false,inferenceMs:0};
+    }
+    const person=usePerson?personTracker.selection.selected:null;
+    const roi=usePerson?personTracker.selection.roi:null;
+    const input=roi&&cameraInput?personCrop.update(cameraInput.canvas,roi,video.currentTime):fullInput;
+    const region=usePerson&&roi?personCrop.region:null;
+    const allowed=!usePerson||!!region;
+    let poseMs=0;
+    if(sim)body=sim.body(now/1000);
+    else if(poseTracker&&allowed){
+      const pr=poseTracker.update(video,now,input,region);rawPose=pr;poseMs=pr.inferenceMs;
+      if(usePerson){
+        const selected=pr.poses.find(p=>person&&p.nose.x>=person.x&&p.nose.x<=person.x+person.w&&p.nose.y>=person.y&&p.nose.y<=person.y+person.h*.65)??null;
+        body=bodyProc.update(selected,pr.fresh,now);
+      }else{
+        const revision=bodyTarget.revision;
+        const selected=bodyTarget.update(pr.poses,signals.target,pr.fresh,now);
+        if(revision!==bodyTarget.revision){signals=new SignalProcessor(cfg);bodyProc=new BodyProcessor(cfg);tracker?.resetInput();confirmation.reset();}
+        body=bodyProc.update(selected,pr.fresh,now);
       }
-      body = bodyProc.update(selected, pr.fresh, now);
-    } else body = null;
-    const hint = bodyTarget.headHint(now);
-    const track = tracker ? tracker.update(video, now, input, hint) : { faces: [], inferenceMs: 0 };
-    bodyTarget.observeFace(track, now);
-    const confirmedBody = sim ? body !== null : cfg.presence.mimicOnLock ? bodyTarget.confirmed(now) : body !== null;
-    if (!sim && cfg.presence.mimicOnLock && !confirmedBody) body = null;
-    if (track.observedAtMs !== undefined && track.observedAtMs !== lastInferMs) {
-      inferFrames++;
-      lastInferMs = track.observedAtMs;
-    }
-    sig = sim ? sim.update(dt) : signals.update(track, now, cameraInput!.canvas.width / cameraInput!.canvas.height, hint);
-    snap = fsm.update(sig, now, confirmedBody);
+    }else body=null;
+    const observedPose=rawPose.poses[0];
+    const shoulders=observedPose?.image;
+    const hint=usePerson&&region&&shoulders&&now-(rawPose.observedAtMs??-Infinity)<350
+      ? {cx:(observedPose.nose.x-region.x)/region.w,cy:(observedPose.nose.y-region.y)/region.h,
+        size:Math.hypot((shoulders[11].x-shoulders[12].x)*region.aspect,shoulders[11].y-shoulders[12].y)*1.8/region.h}
+      :usePerson?null:bodyTarget.headHint(now);
+    let track=tracker&&allowed?tracker.update(video,now,input,hint,region,!kiosk&&cfg.debugVision.faceLandmarks&&!document.body.classList.contains("debug-hidden")):{faces:[],inferenceMs:0,observedAtMs:now};
+    if(usePerson&&person)track={...track,faces:track.faces.filter(f=>faceInPerson(f,person))};
+    if(!usePerson)bodyTarget.observeFace(track,now);
+    if(track.observedAtMs!==undefined&&track.observedAtMs!==lastInferMs){inferFrames++;lastInferMs=track.observedAtMs;}
+    sig=sim?sim.update(dt):signals.update(track,now,cameraInput!.canvas.width/cameraInput!.canvas.height,usePerson?null:hint);
+    const confirmed=!!sim||confirmation.update(track.faces.length>0&&sig.present,track.observedAtMs,now,cfg.recognition.confirmMs,cfg.presence.faceLostHoldMs);
+    const confirmedBody=sim?body!==null:confirmed&&(usePerson?!!person&&body!==null:cfg.presence.mimicOnLock?bodyTarget.confirmed(now):body!==null);
+    if(!sim&&!confirmed)body=null;
+    snap=fsm.update(confirmed?sig:emptySignal(),now,confirmedBody);
 
-    const params = snap.state === "MIMIC" || snap.state === "ENTER" ? mapSignal(sig, cfg.mapping) : NEUTRAL_PARAMS;
+    const params = confirmed && (snap.state === "MIMIC" || snap.state === "ENTER") ? mapSignal(sig, cfg.mapping) : NEUTRAL_PARAMS;
     character.setState(snap);
     character.apply(params, dt, now / 1000, body, true);
     scene.render();
@@ -221,7 +253,12 @@ async function main(): Promise<void> {
     }
     exprTest?.update(now);
     if (tracer) tracer(now, sig, snap.state, params, character, signals.debugFaces, exprTest?.label ?? null);
-    zoneEditor?.draw([...signals.debugFaces, ...(!signals.debugFaces.some(f=>f.locked) ? bodyTarget.debugTarget(now) : [])]);
+    zoneEditor?.draw([...signals.debugFaces, ...(!usePerson&&!signals.debugFaces.some(f=>f.locked) ? bodyTarget.debugTarget(now) : [])], {
+      boxes:personTracker.selection.candidates,selected:person,region,
+      poses:now-(rawPose.observedAtMs??-Infinity)<350?rawPose.poses:[],
+      faces:now-(track.observedAtMs??-Infinity)<350?track.faces:[],
+      status:sim?'시뮬레이션':cfg.person.enabled?personTracker.status+' · '+Math.round(personTracker.inferenceMs)+'ms'+(person?(confirmed?' · 인식 확인됨':' · 얼굴 확인 중'):' · 사람 대기'):'YOLO 꺼짐 · 전체 영상',
+    });
     overlay?.update({
       renderFps, inferFps, inferenceMs: track.inferenceMs, poseMs, body, mouthOpenFrom: cfg.mapping.mouthOpenGeoFrom,
       modelSource: `${quality.info} · ${tracker ? `${tracker.mode} · ${tracker.modelSource}` : "sim"}`, sig, snap,

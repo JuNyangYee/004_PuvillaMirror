@@ -1,3 +1,4 @@
+import {DEFAULT_PERSON, type PersonOptions} from "./personSelection";
 import {enforcePresentation} from "./presentation";
 import {DEFAULT_LIGHT_DIRECTIONS, type LightDirections} from "./lighting";
 import { isEmbedded } from "./embedded";
@@ -43,6 +44,9 @@ export interface Config {
     /** 얼굴 인식을 별도 스레드(Web Worker)에서 — 렌더가 추론을 기다리지 않음. 안 되면 자동으로 메인 스레드 */
     useWorker: boolean;
   };
+  person: PersonOptions;
+  recognition: { confirmMs:number };
+  debugVision: { yoloBoxes:boolean; inputRegion:boolean; bodyPoints:boolean; faceLandmarks:boolean };
   smoothing: {
     headMinCutoff: number;
     headBeta: number;
@@ -452,7 +456,7 @@ export const DEFAULT_CONFIG: Config = {
       "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
     wasmPath: "./mediapipe/wasm",
     delegate: "GPU",
-    numFaces: 3,
+    numFaces: 1,
     minFaceDetectionConfidence: 0.5,
     minFacePresenceConfidence: 0.5,
     minTrackingConfidence: 0.5,
@@ -460,6 +464,9 @@ export const DEFAULT_CONFIG: Config = {
     transposeMatrix: false,
     useWorker: true,
   },
+  person: {...DEFAULT_PERSON},
+  recognition: {confirmMs:350},
+  debugVision: {yoloBoxes:true,inputRegion:true,bodyPoints:false,faceLandmarks:false},
   smoothing: { headMinCutoff: 1.0, headBeta: 0.05, blendMinCutoff: 1.5, blendBeta: 0.1, blinkMinCutoff: 6, dCutoff: 1.0 },
   presence: {
     mimicOnLock: true,
@@ -581,7 +588,7 @@ export const DEFAULT_CONFIG: Config = {
       "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
     delegate: "GPU",
     everyNFrames: 1,
-    numPoses: 3,
+    numPoses: 1,
     minDetectionConfidence: 0.5,
     minPresenceConfidence: 0.5,
     minTrackingConfidence: 0.5,
