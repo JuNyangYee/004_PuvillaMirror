@@ -1,3 +1,4 @@
+import {galleryUpdateControls} from './galleryControls';
 import GUI from "lil-gui";
 import {resetLightDirections, type LightRole} from "./lighting";
 import {resetCameraView, ORBIT_LIMITS} from "./cameraView";
@@ -42,6 +43,7 @@ export class Overlay {
     this.statsEl = document.getElementById("stats")!;
     this.gui = new GUI({ title: "푸빌라 설정 · D로 닫기", width: 360 });
     const onC = hooks.onCharacterChange;
+    galleryUpdateControls(this.gui);
 
     const vision=this.gui.addFolder('인식 설정 — YOLO · MediaPipe');
     vision.add(cfg.person,'enabled').name('YOLO로 대상 1명 선택');

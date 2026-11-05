@@ -419,6 +419,7 @@ export interface Config {
       /** 초당 새로 칠하는 그림 수 */
       fps: number;
       /** 처리 해상도 짧은 변 px (기준) */
+      gallery?: {revision:string;values:Record<string,number|string>;history:Record<string,Record<string,number|string>>};
       shortSide: number;
       /** 처리 해상도 배율 (½ · ¾ · 1) — shortSide 에 곱함 */
       res: number;

@@ -111,3 +111,7 @@ Face와 Pose는 같은 선택 인물의 ROI를 사용한다. 얼굴 위치로 �
 - 검사: person:roi:check, recognition:check, face:freshness:check, face:continuity:check, arm:dropout:check. 기존 얼굴 영역 고정·BodyTargetLock 전용 검사는 새로운 소유권·참여 단계 검사로 대체했다.
 
 Pose 추가 필터 비교: `body.additionalSmoothing` 기본값은 true다. 설정 > 상반신 > MediaPipe 이후 추가 스무딩으로 관절·손 방향의 One Euro 필터를 켜고 끌 수 있다. 다시 켤 때 이력을 비워 오래된 자세와 섞이지 않게 한다. D 모드 관절 점은 원래부터 BodyProcessor 이전 MediaPipe 좌표(ROI를 원본 영상 좌표로 복원한 값)를 표시하므로 이 토글의 영향을 받지 않는다.
+
+## 갤러리 필터 업데이트
+
+유화는 galleryFilter.ts가 로드한 공식 갤러리 모듈을 oilFilter.ts에서 실행한다. 조절 UI는 원격 스키마로 생성한다. D 모드에서 버전 확인·시험 렌더·적용·복원이 가능하다. 저장 형식과 배포 지원은 [FILTER_UPDATES.md](FILTER_UPDATES.md)를 참고한다.

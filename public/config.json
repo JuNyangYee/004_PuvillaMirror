@@ -339,14 +339,27 @@
     "posterLevels": 0,
     "oil": {
       "enabled": true,
-      "strength": 0,
-      "size": 0.6,
-      "boil": 0.05,
-      "fps": 12,
+      "strength": 0.29,
+      "size": 1.23,
+      "boil": 0.02,
+      "fps": 15,
       "shortSide": 1080,
       "res": 1,
       "grade": 1,
-      "split": 0
+      "split": 0,
+      "gallery": {
+        "revision": "c539bff6405db398123b1eb468f74a50d3dea6e60a85110fd755325c82b24861",
+        "values": {},
+        "history": {
+          "legacy": {
+            "strength": 0,
+            "size": 0.6,
+            "boil": 0.05,
+            "fps": 12,
+            "grade": 1
+          }
+        }
+      }
     }
   },
   "quality": {

@@ -1,3 +1,4 @@
+import {galleryControls} from './galleryControls';
 import type {Config} from './config';
 import type {Scene} from './scene';
 import type {Backdrop} from './backdrop';
@@ -46,7 +47,7 @@ export function setupViewControls(full:Config,scene:Scene,onChange:()=>void,back
   const settings=document.getElementById('overlayToggle');if(settings)toolbar.appendChild(settings);
   const oilPanel = document.createElement("div");
   oilPanel.id = "oilPanel";
-  oilPanel.style.cssText='padding:14px;border-radius:14px;background:#14213bee;color:#fff;font:12px/1.3 system-ui;display:none;flex-direction:column;gap:9px';
+  oilPanel.style.cssText='padding:14px;border-radius:14px;background:#14213bee;color:#fff;font:12px/1.3 system-ui;display:none;flex-direction:column;gap:9px;max-height:75vh;overflow-y:auto';
   const oil = full.filter.oil;
   let saveT = 0;
   const saveOil = () => {
@@ -111,11 +112,7 @@ export function setupViewControls(full:Config,scene:Scene,onChange:()=>void,back
     paintSeg();
     r.appendChild(box);
   };
-  addSlider("강도", "strength", 0, 1.6, 0.05);
-  addSlider("붓 크기", "size", 0.6, 1.8, 0.05);
-  addSlider("획 변화", "boil", 0, 1, 0.05);
-  addSeg("초당 그림", "fps", [["24", 24], ["12", 12], ["8", 8]]);
-  addSlider("색 보정", "grade", 0, 1, 0.05);
+  galleryControls(oilPanel,oil,saveOil);
   addSlider("비교 위치", "split", 0, 1, 0.01);
   addSeg("처리 해상도", "res", [["½", 0.5], ["¾", 0.75], ["1", 1]]);
   for (const ev of ["pointerdown", "pointermove", "wheel"]) oilPanel.addEventListener(ev, (e) => e.stopPropagation());

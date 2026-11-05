@@ -1,3 +1,4 @@
+import {initializeGallery} from './galleryFilter';
 import "./embedded"; // Install embedded asset handling before other runtime modules.
 import {PersonTracker} from "./personTracker";
 import {PersonCrop} from "./inferenceRegion";
@@ -39,6 +40,8 @@ async function main(): Promise<void> {
   const setBoot = (s: string) => (boot.textContent = s);
 
   const cfg = await loadConfig();
+  setBoot("유화 필터 불러오는 중…");
+  await initializeGallery(cfg.filter.oil);
   cfg.tracker.numFaces=1;cfg.pose.numPoses=1;
   const params = new URLSearchParams(location.search);
   const kiosk = isKiosk();

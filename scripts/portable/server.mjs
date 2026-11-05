@@ -1,3 +1,4 @@
+import {filterUpdates} from './filter-updates.mjs';
 import {createServer} from 'node:http';
 import {createReadStream,readFileSync,statSync} from 'node:fs';
 import {resolve,extname,sep} from 'node:path';
@@ -6,11 +7,13 @@ const root=fileURLToPath(new URL('./site/',import.meta.url));
 const base=resolve(root);
 const port=4178, host=`127.0.0.1:${port}`;
 const mime={'.js':'text/javascript','.html':'text/html; charset=utf-8','.css':'text/css','.json':'application/json','.wasm':'application/wasm','.webp':'image/webp','.jpg':'image/jpeg','.png':'image/png','.svg':'image/svg+xml'};
+const update=filterUpdates(base);
 createServer((req,res)=>{
   // Loopback only, reject DNS rebinding and foreign origins.
   if(req.headers.host!==host || (req.headers.origin && req.headers.origin!==`http://${host}`)){
     res.writeHead(403).end();return;
   }
+  if(req.url.startsWith('/__mimic/filter-update')){void update(req,res);return;}
   if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405).end();return;}
   let path;
   try{path=decodeURIComponent(new URL(req.url,`http://${host}`).pathname);}

@@ -1,30 +1,12 @@
 import * as THREE from "three";
-import { OilStroke, fitSize } from "./vendor/oil-stroke.js";
+import {createGalleryEngine,engineOptions,syncGallerySettings,type GalleryEngine,type OilSettings} from './galleryFilter';
 import { PaintCadence } from "./paintCadence";
 
-/**
- * 유화 획 필터 (세부 보존) — 제작자가 준 단독 모듈 `vendor/oil-stroke.js`(재료 필터 갤러리와 픽셀 단위로 같음)를 씀.
- * 사용법은 docs/oil-stroke-guide.md '2. 이미 WebGL·three.js로 그리는 장면에 입히기' 그대로:
- *  1) 우리 캔버스(three)에 '필터 입력 화면'을 그림 = 장면(선형·알파 곱 HalfFloat) → 톤매핑·sRGB → 배경(주황 / 겨울 그림) 위 합성
- *     → 앞 장식(가지)까지 합성 — 배경·가지까지 전부 함께 칠해지게
- *  2) 그린 바로 다음 줄에서 fx.frame(우리 캔버스) — 모듈은 자기 캔버스(우리 캔버스 위에 겹친 것)에 그림
- *     (모듈이 그림 번호가 바뀔 때만, 초당 fps 장 새로 칠함)
- * 갤러리 '조정' 중 비교 위치·처리 해상도는 모듈에 없어서 여기서: 비교 위치 = 필터 캔버스 왼쪽을 잘라 아래 원본이 보이게,
- * 처리 해상도 = 필터 캔버스 짧은 변(1080 × ½·¾·1, 화면보다 크게는 안 함).
+/** Composite the existing 3D scene once per paint tick, then run the downloaded gallery engine.
+ * Background, foreground and lighting retain the same source pipeline.
  */
-export interface OilCfg {
-  strength: number;
-  size: number;
-  boil: number;
-  fps: number;
-  grade: number;
-  /** 처리 해상도 기준 짧은 변 px (모듈 수치 기준 1080) */
-  shortSide: number;
-  /** 처리 해상도 배율 (½ · ¾ · 1) */
-  res: number;
-  /** 비교 위치 0~1 (왼쪽은 원본) */
-  split: number;
-}
+export type OilCfg = OilSettings;
+const fitSize=(w:number,h:number,short:number)=>({w:Math.max(2,Math.round(w*short/Math.min(w,h))),h:Math.max(2,Math.round(h*short/Math.min(w,h)))});
 
 const VS = `#version 300 es
 const vec2 P[3] = vec2[3](vec2(-1.,-1.), vec2(3.,-1.), vec2(-1.,3.));
@@ -74,7 +56,7 @@ export class OilStrokeFilter {
   private vao: WebGLVertexArrayObject;
   private out = document.createElement("canvas");
   private line = document.createElement("div");
-  private fx: OilStroke;
+  private fx: GalleryEngine;
   private applied = "";
   private cadence = new PaintCadence();
 
@@ -108,7 +90,7 @@ export class OilStrokeFilter {
     this.out.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;display:block";
     this.line.style.cssText = "position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;pointer-events:none;z-index:3;display:none";
     document.getElementById("app")!.after(this.out, this.line);
-    this.fx = new OilStroke(this.out);
+    this.fx = createGalleryEngine(this.out);
   }
 
   private U(name: string): WebGLUniformLocation | null {
@@ -133,9 +115,11 @@ export class OilStrokeFilter {
     const cw = gl.drawingBufferWidth, ch = gl.drawingBufferHeight;
     const now = performance.now() / 1000;
     const c = this.cfg;
+    syncGallerySettings(c);
     const short = Math.min(Math.round(c.shortSide * (c.res || 1)), Math.min(cw, ch));
     const { w, h } = fitSize(cw, ch, short);
-    const key = `${w}x${h}|${c.strength}|${c.size}|${c.boil}|${c.fps}|${c.grade}`;
+    const options=engineOptions(c, Math.min(w,h));
+    const key = JSON.stringify(options);
     if (!this.cadence.take(now, c.fps, `${cw}x${ch}|${key}|${c.split}`, c.split)) return;
     // Keep interpolation continuous, but evaluate geometry only for visible frames.
     this.beforeSource();
@@ -189,7 +173,8 @@ export class OilStrokeFilter {
         this.out.width = w;
         this.out.height = h;
       }
-      this.fx.set({ strength: c.strength, size: c.size, boil: c.boil, fps: c.fps, grade: c.grade });
+      this.fx.set({tune:null});
+      this.fx.set(options);
       this.applied = key;
     }
     this.out.style.display = "block";
@@ -198,12 +183,12 @@ export class OilStrokeFilter {
     this.line.style.display = sp > 0 && sp < 1 ? "block" : "none";
     this.line.style.left = `${sp * 100}%`;
     // 같은 틀 안에서 바로 (브라우저가 화면에 내보낸 WebGL 캔버스는 비워짐 — 가이드 2번)
-    this.fx.frame(r.domElement, now);
+    this.fx.render(r.domElement, {time:now,force:true});
   }
 
   /** 마지막 그림 CPU 시간 (ms) */
   get lastMs(): number {
-    return this.fx.ms;
+    return this.fx.info.ms;
   }
 
   dispose(): void {

@@ -9,3 +9,7 @@ release/
 dist-next/
 dist-old/
 tmp/
+
+# Filter update rollback files stay local. Current package is versioned.
+public/filter/history/
+public/filter/*.tmp

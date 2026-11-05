@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import {readFile,mkdir,writeFile,mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {createServer} from 'node:http';
+import {buildPackage,literal,hash} from './gallery-package.mjs';
+import {filterUpdates} from './filter-updates.mjs';
+const pack=JSON.parse(await readFile('public/filter/current.json','utf8'));
+const page=await readFile('scripts/fixtures/gallery-controls.html','utf8');
+const baseline=buildPackage(pack.engine,page);
+assert.equal(baseline.schema.length,16);
+assert.equal(baseline.defaults.fps,15);assert.equal(baseline.defaults['OIL.refineT'],.1);
+assert.throws(()=>literal('{a:process.exit()}'));
+assert.throws(()=>literal('{__proto__:1}'));
+assert.throws(()=>buildPackage('<html/>',page));
+assert.throws(()=>buildPackage(pack.engine.replace('strength:0.29','strength:0.3'),page),/disagree/);
+const changedPage=page.replace('"눈·코 테 정리",0,1,0.05','"눈·코 테 정리",0,2,0.01');
+const rangeChange=buildPackage(pack.engine,changedPage);
+assert.equal(rangeChange.schema.find(s=>s.key==='OIL.eye').max,2);
+assert.equal(rangeChange.schema.find(s=>s.key==='OIL.eye').step,.01);
+const added=buildPackage(pack.engine.replace('eye: 0 };','eye: 0, extra: .25 };'),page.replace('oil:[','oil:[["OIL.extra","새 조절",0,1,0.01,"설명"],'));
+assert.equal(added.schema.find(s=>s.key==='OIL.extra').default,.25);
+const tmp=await mkdtemp(join(tmpdir(),'mimic-filter-'));
+let incoming=rangeChange;
+await mkdir(join(tmp,'filter'));await writeFile(join(tmp,'filter/current.json'),JSON.stringify(pack));
+const middleware=filterUpdates(tmp,async()=>{if(incoming instanceof Error)throw incoming;return incoming;});
+const server=createServer(middleware);await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const url='http://127.0.0.1:'+server.address().port;
+async function request(path,body,origin=url){const r=await fetch(url+'/__mimic/filter-update/'+path,{method:body?'POST':'GET',headers:{origin,'content-type':'application/json'},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json()};}
+try{
+ assert.equal((await request('check',{},'https://evil.example')).status,403);
+ assert.equal((await request('apply',{id:pack.id,tested:true})).status,400);
+ const check=await request('check',{});assert.equal(check.data.same,false);
+ assert.equal((await request('apply',{id:rangeChange.id})).status,400);
+ assert.equal((await request('apply',{id:rangeChange.id,tested:true})).status,200);
+ let saved=JSON.parse(await readFile(join(tmp,'filter/current.json')));assert.equal(saved.id,rangeChange.id);
+ assert.ok((await request('status')).data.history.includes(pack.id));
+ incoming=Error('offline');assert.equal((await request('check',{})).status,400);
+ saved=JSON.parse(await readFile(join(tmp,'filter/current.json')));assert.equal(saved.id,rangeChange.id);
+ assert.equal((await request('candidate',{id:'../config'})).status,400);
+ assert.equal((await request('rollback',{id:pack.id,tested:true})).status,200);
+ assert.equal(JSON.parse(await readFile(join(tmp,'filter/current.json'))).id,pack.id);
+}finally{await new Promise(r=>server.close(r));await rm(tmp,{recursive:true,force:true});}
+console.log('PASS: upstream defaults/schema, new controls/ranges, mismatched versions, untrusted literals, local-origin restriction, apply/history/offline/rollback');

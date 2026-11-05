@@ -8,6 +8,7 @@ execFileSync(process.execPath,['node_modules/vite/bin/vite.js','build'],{stdio:'
 mkdirSync(output,{recursive:true});
 cpSync(resolve(root,'dist'),resolve(output,'site'),{recursive:true,filter:p=>!p.endsWith('.map')});
 cpSync(resolve(root,'scripts/portable'),output,{recursive:true});
+for(const file of ['filter-updates.mjs','gallery-package.mjs'])cpSync(resolve(root,'scripts',file),resolve(output,file));
 mkdirSync(resolve(output,'runtime'));
 cpSync(process.execPath,resolve(output,'runtime/node.exe'));
 const license=await fetch(`https://raw.githubusercontent.com/nodejs/node/${process.version}/LICENSE`);
@@ -28,7 +29,7 @@ config.tracker.useWorker=true;
 config.pose.modelPath='./models/pose_landmarker_full.task';
 config.pose.modelUrlFallback=config.pose.modelPath;
 config.pose.useWorker=true;
-config.filter.oil.fps=12;
+// Oil cadence comes from the downloaded gallery preset.
 writeFileSync(resolve(output,'site/config.json'),JSON.stringify(config,null,2));
 writeFileSync(resolve(output,'사용방법.txt'),`\uFEFF푸빌라 v48 전시용 성능 후보
 

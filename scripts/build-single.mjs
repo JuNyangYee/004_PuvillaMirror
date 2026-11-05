@@ -12,6 +12,7 @@ const outFile = resolve(outDir, "pubilla-mimic.html");
 // 실행에 필요한 것만 (SIMD wasm 만 — 최근 Chrome 은 전부 지원)
 const EMBED = [
   "config.json",
+  "filter/current.json",
   "models/pu_stand.obj",
   "models/stand_connected_rig.json",
   "models/stand_connected_cage_mirrorleft.json",
