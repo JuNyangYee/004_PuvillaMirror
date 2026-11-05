@@ -1,6 +1,7 @@
 import {DEFAULT_PERSON, type PersonOptions} from "./personSelection";
 import {DEFAULT_RECOGNITION, type RecognitionOptions} from "./recognitionGate";
 import type {GroundShadowOptions} from "./groundedBackdrop";
+import {enforceLegacyArmTracking} from './armTrackingMode';
 import {enforcePresentation} from "./presentation";
 import {DEFAULT_LIGHT_DIRECTIONS, DEFAULT_WINTER_LIGHT_COLORS, type LightDirections, type WinterLightColors} from "./lighting";
 import { isEmbedded } from "./embedded";
@@ -616,7 +617,7 @@ export const DEFAULT_CONFIG: Config = {
     armPawFrame: true,
     armImagePalm: true,
     armFollowPose: true,
-    armTrackingMode: 'hybrid',
+    armTrackingMode: 'legacy',
     armHybridFollow: .35,
   },
   scene: {
@@ -705,7 +706,7 @@ export async function loadConfig(url = "./config.json"): Promise<Config> {
         /* 저장소 막힘 → 배포 설정 그대로 */
       }
     }
-    return enforcePresentation(removeLegacyRecognition(cfg));
+    return enforceLegacyArmTracking(enforcePresentation(removeLegacyRecognition(cfg)));
   } catch (e) {
     console.warn("[config] config.json 로드 실패, 기본값 사용:", e);
     return enforcePresentation(structuredClone(DEFAULT_CONFIG));
@@ -720,6 +721,7 @@ const CONFIG_COMMENT =
  * 서버 저장이 안 되는 환경(vite preview·키오스크)에서는 false — 호출 측이 다운로드로 대체.
  */
 export async function saveConfig(cfg: Config): Promise<boolean> {
+  enforceLegacyArmTracking(cfg);
   if (localMode) {
     try {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(diff(cfg, deployed) ?? {}));

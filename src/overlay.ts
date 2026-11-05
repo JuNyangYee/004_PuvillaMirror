@@ -115,18 +115,8 @@ export class Overlay {
     f8.add(cfg.body, "torsoYawClampDeg", 0, 60, 1).name("비틀기 최대 (°)");
     f8.add(cfg.body, "torsoRollClampDeg", 0, 45, 1).name("옆 기울기 최대 (°)");
     f8.add(cfg.body, "torsoPitchClampDeg", 0, 45, 1).name("앞뒤 숙이기 최대 (°)");
-    const armMode=f8.add(cfg.body,'armTrackingMode',{'혼합 — 안정화 + 동작 추종':'hybrid','MediaPipe 직접 따라가기':'direct','기존 제한 방식 (복원)':'legacy'}).name('팔 동작 방식');
-    const contact=f8.add(cfg.body,'armTorsoClearance').name('몸통 관통 방지');
-    const hybridAmount=f8.add(cfg.body,'armHybridFollow',0,1,.05).name('혼합 추종량 (높을수록 원동작)');
-    const legacyArms=f8.addFolder('기존 팔 제한 설정');
+    const legacyArms=f8.addFolder('팔 동작 설정');
     legacyArms.close();
-    const showLegacy=()=>{
-      const hybrid=cfg.body.armTrackingMode==='hybrid';
-      if(cfg.body.armTrackingMode==='legacy')legacyArms.show();else legacyArms.hide();
-      if(hybrid){hybridAmount.show();cfg.body.armTorsoClearance=true;}else hybridAmount.hide();
-      contact.disable(hybrid).name(hybrid?'몸통 관통 방지 (혼합 모드 고정)':'몸통 관통 방지').updateDisplay();
-    };
-    armMode.onChange(showLegacy);showLegacy();
     legacyArms.add(cfg.body, "elbowGain", 0, 2, 0.05).name("팔꿈치 굽힘 배율 (×)");
     legacyArms.add(cfg.body, "armRaiseMaxRad", 1, 3, 0.05).name("팔 드는 최대 각 (rad, 아래=0)");
     f8.add(cfg.body, "minVisibility", 0, 1, 0.05).name("관절 신뢰도 최소 (0~1)");

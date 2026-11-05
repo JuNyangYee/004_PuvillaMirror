@@ -1,6 +1,12 @@
 # Arm tracking modes
 
-The default is `body.armTrackingMode: "hybrid"`. Its `armHybridFollow` value defaults to 0.35: direction retargeting retains 65% of the original rest/elevation and elbow-plane correction, while admitting 35% of the measured direction. Camera-plane depth reconstruction is also blended back toward the world estimate by this amount. This is a per-stage direction blend, not a blend of two complete rendered characters.
+Production is now fixed to **legacy**. Default config and post-load/save guards select the original pipeline. Mode selection, hybrid amount and the experimental contact toggle are removed from the UI. The source model's shoulder/upper-arm overlap is intentional; the new full-arm projection is inactive, including in idle. Original legacy contact behavior remains.
+
+The implementations below are retained for development/rollback, not exposed to kiosk users. The complete hybrid version is backed up on local branch backup/arm-hybrid at 2436ae3.
+
+## Archived experiments
+
+The archived hybrid default was `body.armTrackingMode: "hybrid"`. Its `armHybridFollow` value defaults to 0.35: direction retargeting retains 65% of the original rest/elevation and elbow-plane correction, while admitting 35% of the measured direction. Camera-plane depth reconstruction is also blended back toward the world estimate by this amount. This is a per-stage direction blend, not a blend of two complete rendered characters.
 
 Hybrid keeps legacy confidence/drift guards, palm/wrist stabilization, One Euro and render interpolation. It always applies the new torso projection AFTER interpolation, even if an old saved config disables `armTorsoClearance`. The old lift-preserving torso solver is bypassed. The UI locks the contact toggle on in hybrid mode; direct mode still permits unprotected comparisons.
 
