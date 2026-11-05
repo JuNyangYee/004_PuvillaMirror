@@ -5,6 +5,8 @@ const {BodyProcessor}=await import('../src/body.ts'),{imagePalm}=await import('.
 const {armHandMirrorFixture}=await import('../dev/arm-hand-mirror-fixture.ts');
 const {Vector3}=await import('three');
 const config=JSON.parse(readFileSync('public/config.json')),rows=[];
+// Preserve camera-plane palm reconstruction as the legacy option.
+config.body.armTrackingMode='legacy';
 for(const mirror of [true,false])for(const fps of [15,30,60])for(const oneHand of [false,true]){
  const raw=armHandMirrorFixture(8).raw,clean=armHandMirrorFixture(2.5).raw;
  // Keep the same arm/hand screen positions; remove only the injected depth.

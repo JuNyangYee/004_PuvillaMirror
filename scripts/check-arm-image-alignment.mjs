@@ -7,6 +7,8 @@ const {BodyProcessor:Before}=await import('../dev/body-before-v26.ts');
 const {alignedCameraArm}=await import('../src/armImageAlignment.ts');
 const {armSessionFixture}=await import('../dev/arm-session-fixture.ts');
 const cfg=JSON.parse(readFileSync('public/config.json'));
+// Preserve regression coverage for the selectable legacy arm pipeline.
+cfg.body.armTrackingMode='legacy';
 const raw=armSessionFixture(2.5).raw,a=new BodyProcessor(cfg),b=new Before(cfg);
 let after,before;
 for(let t=0;t<2000;t+=50){after=a.update(raw,true,t);before=b.update(raw,true,t);}

@@ -41,7 +41,8 @@
     "snowfall:check": "node --experimental-transform-types scripts/check-snowfall.mjs",
     "person:roi:check": "node --experimental-transform-types scripts/check-person-roi.mjs",
     "recognition:check": "node --experimental-transform-types scripts/check-recognition-stage.mjs",
-    "recognition:margins:check": "node --experimental-transform-types scripts/check-recognition-margins.mjs"
+    "recognition:margins:check": "node --experimental-transform-types scripts/check-recognition-margins.mjs",
+    "arm:direct:check": "node --experimental-transform-types scripts/check-direct-arms.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.1.0",

@@ -1,0 +1,38 @@
+{
+  "commit": "bc170a8b7d208f58147c88ffea668ba3b251ce79",
+  "restore": {
+    "armTrackingMode": "legacy"
+  },
+  "body": {
+    "enabled": true,
+    "minVisibility": 0.5,
+    "lostHoldMs": 500,
+    "additionalSmoothing": true,
+    "minCutoff": 1.2,
+    "responsiveArms": true,
+    "beta": 0.3,
+    "torsoYawGain": 0.8,
+    "torsoPitchGain": 0.5,
+    "torsoRollGain": 1,
+    "torsoYawClampDeg": 35,
+    "torsoPitchClampDeg": 20,
+    "torsoRollClampDeg": 25,
+    "elbowGain": 1,
+    "armRaiseMaxRad": 3,
+    "armRig": "connected",
+    "armRigPath": "./models/stand_connected_cage_mirrorleft.json",
+    "armDeform": "cage",
+    "armHeadClearance": false,
+    "armHeadContact": false,
+    "armUpperClearance": false,
+    "armPawHold": true,
+    "armContinuousAzimuth": true,
+    "armTorsoClearance": true,
+    "armPawContact": false,
+    "armElbowPlane": true,
+    "armPawFrame": true,
+    "armImagePalm": true,
+    "armFollowPose": true,
+    "armBendSpread": 0.45
+  }
+}

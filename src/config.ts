@@ -285,6 +285,8 @@ export interface Config {
     /** Camera-plane palms; excludes unreliable Pose hand-depth rotation. */
     armImagePalm?: boolean;
     armFollowPose?: boolean;
+    /** Direct world-landmark directions; legacy retains all original arm tuning. */
+    armTrackingMode?: 'direct' | 'legacy';
     armDeform?: 'surface' | 'cage';
     armCageRounded?: boolean;
     armHeadClearance?: boolean;
@@ -612,6 +614,7 @@ export const DEFAULT_CONFIG: Config = {
     armPawFrame: true,
     armImagePalm: true,
     armFollowPose: true,
+    armTrackingMode: 'direct',
   },
   scene: {
     bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 0.96, cameraTiltDeg: -6, cameraYawDeg: 0,

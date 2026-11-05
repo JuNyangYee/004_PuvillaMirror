@@ -6,6 +6,8 @@ const {BodyProcessor}=await import('../src/body.ts');
 const {BodyProcessor:Before}=await import('../dev/body-before-v32.ts');
 const {armDriftFixture}=await import('../dev/arm-drift-fixture.ts');
 const cfg=JSON.parse(readFileSync('public/config.json'));
+// Preserve regression coverage for the selectable legacy arm pipeline.
+cfg.body.armTrackingMode='legacy';
 const rows=[];
 for(const fps of [15,30,60])for(const mirror of [false,true])for(const side of ['L','R']){
  const config=structuredClone(cfg);config.camera.mirror=mirror;

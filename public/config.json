@@ -231,7 +231,8 @@
     "armPawFrame": true,
     "armImagePalm": true,
     "armFollowPose": true,
-    "armBendSpread": 0.45
+    "armBendSpread": 0.45,
+    "armTrackingMode": "direct"
   },
   "scene": {
     "bgTop": "#F76A4B",

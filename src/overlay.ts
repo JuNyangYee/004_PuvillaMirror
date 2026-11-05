@@ -115,8 +115,14 @@ export class Overlay {
     f8.add(cfg.body, "torsoYawClampDeg", 0, 60, 1).name("비틀기 최대 (°)");
     f8.add(cfg.body, "torsoRollClampDeg", 0, 45, 1).name("옆 기울기 최대 (°)");
     f8.add(cfg.body, "torsoPitchClampDeg", 0, 45, 1).name("앞뒤 숙이기 최대 (°)");
-    f8.add(cfg.body, "elbowGain", 0, 2, 0.05).name("팔꿈치 굽힘 배율 (×)");
-    f8.add(cfg.body, "armRaiseMaxRad", 1, 3, 0.05).name("팔 드는 최대 각 (rad, 아래=0)");
+    const armMode=f8.add(cfg.body,'armTrackingMode',{'MediaPipe 직접 따라가기':'direct','기존 제한 방식 (복원)':'legacy'}).name('팔 동작 방식');
+    f8.add(cfg.body,'armTorsoClearance').name('몸통 관통 방지');
+    const legacyArms=f8.addFolder('기존 팔 제한 설정');
+    legacyArms.close();
+    const showLegacy=()=>{if(cfg.body.armTrackingMode==='legacy')legacyArms.show();else legacyArms.hide();};
+    armMode.onChange(showLegacy);showLegacy();
+    legacyArms.add(cfg.body, "elbowGain", 0, 2, 0.05).name("팔꿈치 굽힘 배율 (×)");
+    legacyArms.add(cfg.body, "armRaiseMaxRad", 1, 3, 0.05).name("팔 드는 최대 각 (rad, 아래=0)");
     f8.add(cfg.body, "minVisibility", 0, 1, 0.05).name("관절 신뢰도 최소 (0~1)");
     f8.add(cfg.body, "lostHoldMs", 0, 3000, 50).name("몸 놓쳐도 유지 (ms)");
     f8.add(cfg.body, 'additionalSmoothing').name('MediaPipe 이후 추가 스무딩');

@@ -34,6 +34,7 @@ const KEYS = ["shoulderL", "shoulderR", "elbowL", "elbowR", "wristL", "wristR", 
 export class BodyProcessor {
   private bank: OneEuroBank;
   private smoothingEnabled: boolean;
+  private armTrackingMode: Config["body"]["armTrackingMode"];
   private lastSeenMs = -Infinity;
   private last: BodyPose | null = null;
   private armState = {
@@ -48,6 +49,7 @@ export class BodyProcessor {
   constructor(private cfg: Config) {
     const b = cfg.body;
     this.smoothingEnabled = !!b.additionalSmoothing;
+    this.armTrackingMode = b.armTrackingMode;
     this.bank = new OneEuroBank(b.minCutoff, b.beta, cfg.smoothing.dCutoff);
   }
 
@@ -105,6 +107,10 @@ export class BodyProcessor {
       this.smoothingEnabled=!!this.cfg.body.additionalSmoothing;
       this.bank.reset(); // Re-enabling starts from the current sample, not old history.
     }
+    if(this.armTrackingMode!==this.cfg.body.armTrackingMode){
+      this.armTrackingMode=this.cfg.body.armTrackingMode;
+      this.restArms();this.bank.reset();
+    }
     const dropoutHold = Math.min(450, this.cfg.body.lostHoldMs);
     if (!fresh || !raw) {
       if (nowMs - this.lastSeenMs >= dropoutHold) this.restArms();
@@ -157,7 +163,9 @@ export class BodyProcessor {
       const continuous=state.active && near(previous) && (near(anchor)||lowering);
       // A steady raised arm should not drop merely because visibility drifts
       // below the acquisition threshold. Uncertain jumps still release it.
-      const threshold = Math.max(this.cfg.body.minVisibility, continuous ? .5 : .65);
+      const threshold = this.cfg.body.armTrackingMode==='direct'
+        ? Math.max(this.cfg.body.minVisibility,state.active ? .5 : .65)
+        : Math.max(this.cfg.body.minVisibility, continuous ? .5 : .65);
       const inFrame = ids.every(i => !raw.image || (raw.image[i] &&
         Number.isFinite(raw.image[i].x) && Number.isFinite(raw.image[i].y) &&
         raw.image[i].x >= 0 && raw.image[i].x <= 1 && raw.image[i].y >= 0 && raw.image[i].y <= 1));
@@ -205,7 +213,7 @@ export class BodyProcessor {
     };
     for (const s of ["L","R"] as const) {
       if (armConfidence[s]===0 || held[s]) continue;
-      const aligned=alignedCameraArm(raw,side[s],mirror);
+      const aligned=this.cfg.body.armTrackingMode==='direct'?null:alignedCameraArm(raw,side[s],mirror);
       if (!aligned) continue;
       const shoulder=new Vector3(...pts[`shoulder${s}`]),elbow=new Vector3(...pts[`elbow${s}`]);
       const oldFore=new Vector3(...pts[`wrist${s}`]).sub(elbow);
@@ -246,7 +254,7 @@ export class BodyProcessor {
       // MediaPipe Pose: left pinky/index 17/19, right pinky/index 18/20.
       const right = side[s][0] === LM.rShoulder;
       const pinky=right?18:17, index=right?20:19;
-      if(this.cfg.body.armImagePalm){
+      if(this.cfg.body.armImagePalm && this.cfg.body.armTrackingMode!=='direct'){
         if(armConfidence[s]<this.cfg.body.minVisibility)continue;
         const palm=imagePalm(raw,side[s][2],index,pinky,mirror,Math.max(.65,this.cfg.body.minVisibility));
         if(palm){

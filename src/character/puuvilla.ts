@@ -17,6 +17,8 @@ import { StandingArmSurface } from "./standingArmSurface";
 import { socketNormalProbes } from "./standingSocketNormals";
 import { standingWaveMotion } from "../standingWave";
 import { standingUpperDirection, standingFollowDirection } from "./standingArmPose";
+import {directArmPose} from './directArmPose';
+import {resolveDirectArmContact} from './directArmContact';
 import { StandingTorsoContact } from "./standingTorsoClearance";
 import {separateStandingPaws} from './standingPawContact';
 import {StandingElbowPlane} from './standingElbowPlane';
@@ -297,6 +299,7 @@ export class PuuvillaCharacter implements CharacterRig {
   private pawTracking=[new StandingPawTracking(),new StandingPawTracking()];
   private torsoContact=[new StandingTorsoContact(),new StandingTorsoContact()];
   private elbowPlanes=[new StandingElbowPlane(),new StandingElbowPlane()];
+  private lastArmTrackingMode: string | undefined;
   private upperContactActive=[false,false];
 
   private constructor(private cfg: Config, parts: PolyMesh[], private sit = false, private seat: SeatRig | null = null, armJointsFile: ArmJoints | null = null, standingRig: StandingRig | null = null) {
@@ -1037,14 +1040,20 @@ export class PuuvillaCharacter implements CharacterRig {
     // Camera-follow directions must be converted through the chest actually
     // rendered, not the full human torso rotation (the rendered torso has gains,
     // clamps and smoothing). Otherwise opposite arms acquire opposite drift.
-    const armFrame=this.connectedArms&&this.cfg.body.armFollowPose&&!this.debugLegacyArmFrame
+    if(this.lastArmTrackingMode!==this.cfg.body.armTrackingMode){
+      this.lastArmTrackingMode=this.cfg.body.armTrackingMode;
+      this.resetArmContact();
+      this.pawTracking.forEach(tracking=>tracking.reset());
+    }
+    const directArms=this.cfg.body.armTrackingMode==='direct';
+    const armFrame=this.connectedArms&&(directArms||this.cfg.body.armFollowPose)&&!this.debugLegacyArmFrame
       ? new THREE.Quaternion().multiplyQuaternions(spine.quaternion,chest.quaternion)
       : humanTorso;
     const fa = this.cfg.character;
     const upperContacts=[false,false];
     const resting=this.arms.map(arm=>!!(this.connectedArms&&mimic&&this.cfg.body.enabled&&
       (!pose||(arm.side>0?pose.armL:pose.armR)<this.cfg.body.minVisibility)));
-    const following=this.arms.map(arm=>!!(this.connectedArms&&this.cfg.body.armFollowPose&&pose&&
+    const following=this.arms.map(arm=>!!(this.connectedArms&&(directArms||this.cfg.body.armFollowPose)&&pose&&
       (arm.side>0?pose.armL:pose.armR)>=this.cfg.body.minVisibility));
     for (const arm of this.arms) {
       const tu = arm.tUpper.identity();
@@ -1106,7 +1115,7 @@ export class PuuvillaCharacter implements CharacterRig {
         }
       }
       const follow=following[arm.side>0?0:1];
-      if(follow){
+      if(follow && !directArms){
         if(this.cfg.body.armTorsoClearance){
           const j=this.armJoints.find(j=>j.side===arm.side)!;
           this.torsoContact[arm.side>0?0:1].solveLift(j.s,j.h.distanceTo(j.s),arm.restFore,tu,tf,dtSec,chest.quaternion);
@@ -1135,6 +1144,11 @@ export class PuuvillaCharacter implements CharacterRig {
         :following[contactIndex]&&this.cfg.body.responsiveArms?1-Math.exp(-28*dtSec):k;
       arm.qUpper.slerp(arm.tUpper, armK);
       arm.qFore.slerp(arm.tFore, armK);
+      if(directArms && following[contactIndex] && this.cfg.body.armTorsoClearance){
+        const j=this.armJoints.find(j=>j.side===arm.side)!;
+        resolveDirectArmContact(j.s,j.h.distanceTo(j.s),arm.restUpper,arm.restFore,
+          arm.qUpper,arm.qFore,chest.quaternion,this.cfg.body.armBendSpread??.32);
+      }
       if(!following[contactIndex] && this.connectedArms && this.cfg.body.armHeadClearance && this.cfg.body.armHeadContact!==false){
         const j=this.armJoints.find(j=>j.side===arm.side)!;
         if(this.cfg.body.armUpperClearance)upperContacts[contactIndex]=resolveStandingUpperContact(j.s,j.h.distanceTo(j.s),arm.restFore,arm.qUpper,arm.qFore,head.quaternion,dtSec)>1e-7||upperContacts[contactIndex];
@@ -1152,7 +1166,7 @@ export class PuuvillaCharacter implements CharacterRig {
         const raised = smooth(-.35, .65, direction.y);
         // Roll the supplied paw without scaling its width or length.
         let target = arm.side * (this.debugPawTurn ?? -Math.PI/2) * raised;
-        if(this.cfg.body.armPawFrame && this.debugPawTurn===null && !this.debugDisableFrontPaw){
+        if(!directArms && this.cfg.body.armPawFrame && this.debugPawTurn===null && !this.debugDisableFrontPaw){
           const viewer=this.debugLegacyPalm?undefined:new THREE.Vector3(0,0,1).applyQuaternion(armFrame.clone().invert());
           const front=standingFrontPawRoll(arm.restFore,arm.qUpper,arm.qFore,arm.side,target,viewer,!this.debugLegacyFrontBoundary);
           target+=Math.atan2(Math.sin(front-target),Math.cos(front-target))*raised;
@@ -1199,9 +1213,12 @@ export class PuuvillaCharacter implements CharacterRig {
             .applyQuaternion(arm.qUpper.clone().invert()).applyQuaternion(arm.qFore.clone().invert());
           wristTarget.crossVectors(arm.restFore,palm);
           if(wristTarget.lengthSq()>.000001)
-            wristTarget.normalize().multiplyScalar(Math.min(.18,arm.restFore.angleTo(palm)));
+            wristTarget.normalize().multiplyScalar(directArms?arm.restFore.angleTo(palm):Math.min(.18,arm.restFore.angleTo(palm)));
         }
-        if(this.cfg.body.armPawHold && pose && conf>=this.cfg.body.minVisibility){
+        if(directArms && following[contactIndex]){
+          this.pawTracking[i].reset();
+          if(trackedRoll!==null)target+=trackedRoll;
+        }else if(this.cfg.body.armPawHold && pose && conf>=this.cfg.body.minVisibility){
           const tracking=this.pawTracking[i];tracking.update(trackedRoll,handDirection?wristTarget:null,timeSec,dtSec);
           if(this.debugPawTurn===null)target+=tracking.roll*raised;
           wristTarget.copy(tracking.wrist);
@@ -1213,8 +1230,8 @@ export class PuuvillaCharacter implements CharacterRig {
         const delta=this.cfg.body.armPawFrame?Math.atan2(Math.sin(target-current),Math.cos(target-current)):target-current;
         const turnStep=this.cfg.body.armPawFrame?clamp(delta*k,6*dtSec):delta*k;
         this.armSurface.turn.value.setComponent(i,
-          this.cfg.body.armPawFrame&&!this.debugLegacyPawTwist
-            ?stepStandingPawTwist(current,target,k,dtSec):current+turnStep);
+          !directArms&&this.cfg.body.armPawFrame&&!this.debugLegacyPawTwist
+            ?stepStandingPawTwist(current,target,k,dtSec):current+(directArms?Math.atan2(Math.sin(target-current),Math.cos(target-current))*k:turnStep));
         this.armSurface.wrist.value[i].lerp(wristTarget,k);
       }
       // 떼어 낸 팔 부품: 들수록 가늘게 (위팔 방향의 y 로 든 정도 — 내린 팔 ≈ -0.8, 다 든 팔 ≈ +0.6)
@@ -1321,6 +1338,10 @@ export class PuuvillaCharacter implements CharacterRig {
     const tf = w.clone().sub(e).normalize().applyQuaternion(inv);
     if (tu.lengthSq() < 0.5 || tf.lengthSq() < 0.5) { outU.identity(); outF.identity(); return; }
 
+    if(this.cfg.body.armTrackingMode==='direct'){
+      directArmPose(arm.restUpper,arm.restFore,tu,tf,outU,outF);
+      return;
+    }
     const theta = Math.acos(clamp(-tu.y, 1));
     let phi = Math.atan2(tu.z, arm.side * tu.x);
     phi = Math.min(2.0, Math.max(-0.5, phi)) * smooth(0.25, 0.7, theta);

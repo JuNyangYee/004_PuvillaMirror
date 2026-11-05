@@ -21,7 +21,12 @@ for(let frame=0;frame<600;frame++){
 }
 assert.ok(oldRejected>400);
 const bad=structuredClone(raw);bad.world[15].visibility=.58;bad.world[15].x+=.25;
-assert.equal(stable.update(bad,true,20100).armR,0,'uncertain moving landmark accepted as a steady arm');
+const movedArm=stable.update(bad,true,20100).armR;
+assert.equal(movedArm,cfg.body.armTrackingMode==='direct'?.58:0,'mode-specific movement acceptance');
+cfg.body.armTrackingMode='legacy';
+const legacy=new BodyProcessor(cfg);
+for(let t=0;t<1000;t+=33)legacy.update(raw,true,t);
+assert.equal(legacy.update(bad,true,1023).armR,0,'legacy drift protection must remain available');
 console.log('PASS: selected pose continuity, dropout clears, steady confidence drift and moving uncertain arm rejection');
 
 // Extra smoothing can be bypassed without changing MediaPipe's native output.
