@@ -42,7 +42,8 @@
     "person:roi:check": "node --experimental-transform-types scripts/check-person-roi.mjs",
     "recognition:check": "node --experimental-transform-types scripts/check-recognition-stage.mjs",
     "recognition:margins:check": "node --experimental-transform-types scripts/check-recognition-margins.mjs",
-    "arm:direct:check": "node --experimental-transform-types scripts/check-direct-arms.mjs"
+    "arm:direct:check": "node --experimental-transform-types scripts/check-direct-arms.mjs",
+    "arm:hybrid:check": "node --experimental-transform-types scripts/check-hybrid-arms.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.1.0",

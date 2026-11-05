@@ -286,7 +286,9 @@ export interface Config {
     armImagePalm?: boolean;
     armFollowPose?: boolean;
     /** Direct world-landmark directions; legacy retains all original arm tuning. */
-    armTrackingMode?: 'direct' | 'legacy';
+    armTrackingMode?: 'hybrid' | 'direct' | 'legacy';
+    /** Hybrid direction blend: 0 old stabilization, 1 observed directions. */
+    armHybridFollow?: number;
     armDeform?: 'surface' | 'cage';
     armCageRounded?: boolean;
     armHeadClearance?: boolean;
@@ -614,7 +616,8 @@ export const DEFAULT_CONFIG: Config = {
     armPawFrame: true,
     armImagePalm: true,
     armFollowPose: true,
-    armTrackingMode: 'direct',
+    armTrackingMode: 'hybrid',
+    armHybridFollow: .35,
   },
   scene: {
     bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 0.96, cameraTiltDeg: -6, cameraYawDeg: 0,

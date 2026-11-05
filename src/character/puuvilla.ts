@@ -18,6 +18,8 @@ import { socketNormalProbes } from "./standingSocketNormals";
 import { standingWaveMotion } from "../standingWave";
 import { standingUpperDirection, standingFollowDirection } from "./standingArmPose";
 import {directArmPose} from './directArmPose';
+import {hybridArmPose} from './hybridArmPose';
+import {hybridFollowAmount} from '../armTrackingMode';
 import {resolveDirectArmContact} from './directArmContact';
 import { StandingTorsoContact } from "./standingTorsoClearance";
 import {separateStandingPaws} from './standingPawContact';
@@ -1046,14 +1048,16 @@ export class PuuvillaCharacter implements CharacterRig {
       this.pawTracking.forEach(tracking=>tracking.reset());
     }
     const directArms=this.cfg.body.armTrackingMode==='direct';
-    const armFrame=this.connectedArms&&(directArms||this.cfg.body.armFollowPose)&&!this.debugLegacyArmFrame
+    const hybridArms=this.cfg.body.armTrackingMode==='hybrid';
+    const measuredArms=directArms||hybridArms;
+    const armFrame=this.connectedArms&&(measuredArms||this.cfg.body.armFollowPose)&&!this.debugLegacyArmFrame
       ? new THREE.Quaternion().multiplyQuaternions(spine.quaternion,chest.quaternion)
       : humanTorso;
     const fa = this.cfg.character;
     const upperContacts=[false,false];
     const resting=this.arms.map(arm=>!!(this.connectedArms&&mimic&&this.cfg.body.enabled&&
       (!pose||(arm.side>0?pose.armL:pose.armR)<this.cfg.body.minVisibility)));
-    const following=this.arms.map(arm=>!!(this.connectedArms&&(directArms||this.cfg.body.armFollowPose)&&pose&&
+    const following=this.arms.map(arm=>!!(this.connectedArms&&(measuredArms||this.cfg.body.armFollowPose)&&pose&&
       (arm.side>0?pose.armL:pose.armR)>=this.cfg.body.minVisibility));
     for (const arm of this.arms) {
       const tu = arm.tUpper.identity();
@@ -1115,13 +1119,13 @@ export class PuuvillaCharacter implements CharacterRig {
         }
       }
       const follow=following[arm.side>0?0:1];
-      if(follow && !directArms){
+      if(follow && !measuredArms){
         if(this.cfg.body.armTorsoClearance){
           const j=this.armJoints.find(j=>j.side===arm.side)!;
           this.torsoContact[arm.side>0?0:1].solveLift(j.s,j.h.distanceTo(j.s),arm.restFore,tu,tf,dtSec,chest.quaternion);
         }
       }
-      if(!follow && !resting[arm.side>0?0:1] && this.connectedArms && this.cfg.body.armTorsoClearance){
+      if(!hybridArms && !follow && !resting[arm.side>0?0:1] && this.connectedArms && this.cfg.body.armTorsoClearance){
         const j=this.armJoints.find(j=>j.side===arm.side)!;
         this.torsoContact[arm.side>0?0:1].solve(j.s,j.h.distanceTo(j.s),arm.restFore,tu,tf,dtSec,chest.quaternion);
       }
@@ -1144,7 +1148,7 @@ export class PuuvillaCharacter implements CharacterRig {
         :following[contactIndex]&&this.cfg.body.responsiveArms?1-Math.exp(-28*dtSec):k;
       arm.qUpper.slerp(arm.tUpper, armK);
       arm.qFore.slerp(arm.tFore, armK);
-      if(directArms && following[contactIndex] && this.cfg.body.armTorsoClearance){
+      if(this.connectedArms && (hybridArms || (directArms && following[contactIndex] && this.cfg.body.armTorsoClearance))){
         const j=this.armJoints.find(j=>j.side===arm.side)!;
         resolveDirectArmContact(j.s,j.h.distanceTo(j.s),arm.restUpper,arm.restFore,
           arm.qUpper,arm.qFore,chest.quaternion,this.cfg.body.armBendSpread??.32);
@@ -1340,6 +1344,11 @@ export class PuuvillaCharacter implements CharacterRig {
 
     if(this.cfg.body.armTrackingMode==='direct'){
       directArmPose(arm.restUpper,arm.restFore,tu,tf,outU,outF);
+      return;
+    }
+    if(this.cfg.body.armTrackingMode==='hybrid'){
+      hybridArmPose(arm.side,arm.restUpper,arm.restFore,tu,tf,
+        this.elbowPlanes[arm.side>0?0:1],dtSec,hybridFollowAmount(this.cfg.body),outU,outF);
       return;
     }
     const theta = Math.acos(clamp(-tu.y, 1));

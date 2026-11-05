@@ -2,6 +2,7 @@ import type { Config } from "./config";
 import type { RawPose } from "./poseTracker";
 import { OneEuroBank } from "./smoothing";
 import { Vector3 } from "three";
+import {hybridFollowAmount} from './armTrackingMode';
 import { alignedCameraArm } from "./armImageAlignment";
 import {imagePalm} from "./imagePalm";
 
@@ -218,6 +219,11 @@ export class BodyProcessor {
       const shoulder=new Vector3(...pts[`shoulder${s}`]),elbow=new Vector3(...pts[`elbow${s}`]);
       const oldFore=new Vector3(...pts[`wrist${s}`]).sub(elbow);
       const upperLength=elbow.distanceTo(shoulder),foreLength=oldFore.length();
+      if(this.cfg.body.armTrackingMode==='hybrid'){
+        const amount=hybridFollowAmount(this.cfg.body);
+        aligned.upper.lerp(elbow.clone().sub(shoulder).normalize(),amount).normalize();
+        aligned.fore.lerp(oldFore.clone().normalize(),amount).normalize();
+      }
       elbow.copy(shoulder).addScaledVector(aligned.upper,upperLength);
       pts[`elbow${s}`]=elbow.toArray();
       pts[`wrist${s}`]=elbow.addScaledVector(aligned.fore,foreLength).toArray();

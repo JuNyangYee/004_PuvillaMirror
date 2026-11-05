@@ -232,7 +232,8 @@
     "armImagePalm": true,
     "armFollowPose": true,
     "armBendSpread": 0.45,
-    "armTrackingMode": "direct"
+    "armTrackingMode": "hybrid",
+    "armHybridFollow": 0.35
   },
   "scene": {
     "bgTop": "#F76A4B",

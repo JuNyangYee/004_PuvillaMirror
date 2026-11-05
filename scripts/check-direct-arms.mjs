@@ -9,6 +9,7 @@ const {PuuvillaCharacter}=await import('../src/character/puuvilla.ts');
 const {BodyProcessor}=await import('../src/body.ts');
 const {armSessionFixture}=await import('../dev/arm-session-fixture.ts');
 const cfg=JSON.parse(readFileSync('public/config.json'));
+cfg.body.armTrackingMode='direct'; // Explicit comparison mode; default may be hybrid.
 const rig=JSON.parse(readFileSync('public/'+cfg.body.armRigPath.replace(/^\.\//,'')));
 let changed=0,minimum=Infinity,maxFreeError=0,cases=0,worst=null;
 const start=performance.now();
