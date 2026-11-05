@@ -36,3 +36,12 @@ export function applyCameraView(camera: THREE.PerspectiveCamera, view: CameraVie
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
 }
+
+/** Center the floor origin using camera-plane translation, preserving orbit and zoom. */
+export function centerFeetInView(camera:THREE.PerspectiveCamera,view:CameraView,scale:number,focusYcm:number):void {
+  applyCameraView(camera,view,scale,focusYcm);
+  const feet=new THREE.Vector3(0,-focusYcm*scale,0).applyMatrix4(camera.matrixWorldInverse);
+  view.pViewOffsetXcm+=feet.x/scale;
+  view.pViewCenterCm+=feet.y/scale;
+  applyCameraView(camera,view,scale,focusYcm);
+}

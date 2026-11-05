@@ -1,5 +1,6 @@
 import type {Config} from './config';
-import {PersonSelection} from './personSelection';
+import {PersonSelection,PERSON_RESULT_MAX_AGE_MS} from './personSelection';
+import {personInRecognitionRange} from './recognitionGate';
 import {log} from './logger';
 /** At most one YOLO frame in flight, independent from face/pose inference cadence. */
 export class PersonTracker {
@@ -22,9 +23,9 @@ export class PersonTracker {
       if(d.type==='ready'){if(this.readyTimer)clearTimeout(this.readyTimer);this.ready=true;this.status='YOLO '+d.backend;}
       else if(d.type==='result'){
         this.busy=false;const now=performance.now();
-        if(d.epoch!==this.epoch||now-d.ts>Math.min(1000,this.cfg.person.lostHoldMs))return;
+        if(d.epoch!==this.epoch||now-d.ts>PERSON_RESULT_MAX_AGE_MS)return;
         this.inferenceMs=d.inferenceMs;
-        this.selection.update(d.boxes,d.ts,this.cfg.presence.lockZone,this.cfg.camera.mirror);
+        this.selection.update(d.boxes,d.ts,b=>personInRecognitionRange(b,this.cfg.recognition,this.cfg.camera.mirror),now);
       }else if(d.type==='error')this.fail(d.message);
     };
     w.onerror=e=>this.fail(e.message);
@@ -35,9 +36,9 @@ export class PersonTracker {
     this.close();this.status='YOLO 오류 · 인식 설정에서 재시도';log.error('yolo',message);
   }
   update(source:HTMLCanvasElement,videoTime:number,now:number):void {
-    const key=JSON.stringify([this.cfg.person.enabled,this.cfg.person.criterion,this.cfg.person.confidence,this.cfg.presence.lockZone,this.cfg.camera.mirror]);
+    const key=JSON.stringify([this.cfg.person.enabled,this.cfg.person.confidence,this.cfg.recognition,this.cfg.camera.mirror]);
     if(this.options&&this.options!==key)this.reset();this.options=key;
-    this.selection.expire(now);
+    this.selection.expire(now,this.busy?this.sent:-Infinity);
     if(this.cfg.person.enabled&&this.status==='준비 중')this.init();
     if(!this.cfg.person.enabled||!this.ready)return;
     if(this.busy){if(now-this.sent>5000)this.fail('YOLO 추론 응답 시간 초과');return;}

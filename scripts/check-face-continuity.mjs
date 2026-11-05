@@ -6,7 +6,6 @@ const {FaceRecovery}=await import('../src/faceRecovery.ts');
 const {FaceRecovery:Before}=await import('../dev/face-recovery-before-v45.ts');
 const {SignalProcessor}=await import('../src/signals.ts');
 const cfg=JSON.parse(readFileSync('public/config.json'));
-cfg.presence.lockZone={x:0,y:0,w:1,h:1};
 let cropX=0;
 globalThis.OffscreenCanvas=class{constructor(w,h){this.width=w;this.height=h;}getContext(){return {filter:'',drawImage(_s,x){cropX=x;}}}};
 const source={width:1280,height:720};
@@ -62,9 +61,9 @@ for(const mirror of [true,false]){
  const c=structuredClone(cfg);c.camera.mirror=mirror;
  const s=new SignalProcessor(c);s.update({faces:[face()],inferenceMs:1},100);
  s.update({faces:[],inferenceMs:1},200);
- assert.equal(s.debugFaces.length,1);assert.equal(s.debugFaces[0].held,true);assert.equal(s.debugFaces[0].locked,false);
+ assert.equal(s.debugFaces.length,1);assert.equal(s.debugFaces[0].held,true);assert.equal(s.debugFaces[0].selected,false);
  s.update({faces:[face()],inferenceMs:1},233);
- assert.equal(s.debugFaces[0].locked,true);assert.equal(s.debugFaces.some(f=>f.held),false);
+ assert.equal(s.debugFaces[0].selected,true);assert.equal(s.debugFaces.some(f=>f.held),false);
 }
 console.table(rows);
 console.log('PASS: recurring brief loss, next-frame recovery, sustained absence, intermittent full probe, honest held/reacquired UI');

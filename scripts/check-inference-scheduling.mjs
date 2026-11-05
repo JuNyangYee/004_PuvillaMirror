@@ -27,7 +27,7 @@ assert.ok(timestamps.every((ts,i)=>i===0 || ts>timestamps[i-1]));
 const distant=new FaceRecovery(); crops=[];let regionalCalls=0;
 const face={bbox:{x:.4,y:.3,w:.2,h:.2,cx:.5,cy:.4}};
 const found=distant.run(input,0,image=>image===input?[]:(++regionalCalls===2?[face]:[]),{cx:.1,cy:.3,size:.4});
-assert.equal(regionalCalls,2); assert.equal(found.length,1);
+assert.equal(regionalCalls,2); assert.equal(found.length,0,'search result outside the selected head hint must not replace it');
 assert.notDeepEqual(crops[0],crops[1]);
 console.log('PASS: same-frame crop deduplication, distinct-region recovery, fresh-frame retry');
 

@@ -17,7 +17,6 @@ export class FaceRecovery {
   private crop: Crop | null = null;
   private nextTile = 0;
   private lastSearch = -Infinity;
-  private lastFull = -Infinity;
   private lastCropSeen = -Infinity;
   private lastTimestamp = -Infinity;
   private width = 0;
@@ -27,7 +26,7 @@ export class FaceRecovery {
   reset(): void {
     this.crop = null;
     this.nextTile = 0;
-    this.lastSearch = this.lastFull = -Infinity;
+    this.lastSearch = -Infinity;
     this.lastCropSeen = -Infinity;
     this.mode = "full";
   }
@@ -52,63 +51,35 @@ export class FaceRecovery {
       if (!faces) { faces = this.scan(input, crop, infer); scans.set(key, faces); }
       return faces;
     };
-    if (hint && [hint.cx,hint.cy,hint.size].every(Number.isFinite) && hint.size>0) {
-      const size=Math.min(width,height,hint.size*height);
-      let crop={x:Math.max(0,Math.min(width-size,hint.cx*width-size/2)),
-        y:Math.max(0,Math.min(height-size,hint.cy*height-size/2)),size};
-      const previous=this.crop;
-      if (previous && now-this.lastCropSeen<800 && size/previous.size>.8 && size/previous.size<1.25 &&
-          Math.hypot(hint.cx*width-previous.x-previous.size/2,hint.cy*height-previous.y-previous.size/2)<previous.size*.18)
-        crop=previous;
-      // Follow the selected person's head. Unrelated full-frame faces must not
-      // prevent an enlarged pass for this person, or steal its expression.
-      const faces=scan(crop).filter(f=>faceMatchesHint(f,hint,width/height));
-      if (faces.length) {
-        this.crop=crop;this.lastCropSeen=now;this.mode="person";
-        return faces;
-      }
+    const validHint=hint&&[hint.cx,hint.cy,hint.size].every(Number.isFinite)&&hint.size>0?hint:null;
+    const relevant=(faces:RawFace[])=>validHint?faces.filter(f=>faceMatchesHint(f,validHint,width/height)):faces;
+    if(this.crop){
+      // Keep exactly the same input framing while it works. In particular do
+      // not feed full-frame probes into this VIDEO graph between cropped frames.
+      const faces=relevant(scan(this.crop));
+      if(faces.length){this.lastCropSeen=now;return faces;}
+      const moved=validHint&&(validHint.cx*width<this.crop.x+this.crop.size*.15||
+        validHint.cx*width>this.crop.x+this.crop.size*.85||validHint.cy*height<this.crop.y+this.crop.size*.15||
+        validHint.cy*height>this.crop.y+this.crop.size*.85);
+      if(!moved&&now-this.lastCropSeen<800){this.mode='recovery-wait';return [];}
+      this.crop=null;
     }
-    let checkedFull = false;
-    let fullFaces: RawFace[] = [];
-    if (!this.crop || now - this.lastFull >= 1000) {
-      fullFaces = infer(input);
-      this.lastFull = now;
-      checkedFull = true;
-      if (fullFaces.length && !this.crop) {
-        this.mode = "full";
-        return fullFaces;
-      }
+    const fullFaces=relevant(infer(input));
+    if(fullFaces.length){this.mode='full';return fullFaces;}
+    // Enlargement is recovery, not a second transform on every healthy frame.
+    if(validHint){
+      const size=Math.min(width,height,validHint.size*height);
+      const crop={x:Math.max(0,Math.min(width-size,validHint.cx*width-size/2)),
+        y:Math.max(0,Math.min(height-size,validHint.cy*height-size/2)),size};
+      const faces=relevant(scan(crop));
+      if(faces.length){this.crop=crop;this.lastCropSeen=now;this.mode='person';return faces;}
     }
-    if (this.crop) {
-      const faces = scan(this.crop);
-      if (faces.length) {
-        this.lastCropSeen = now;
-        // Keep the proven inference framing. A single successful full-frame
-        // probe is not evidence that full-frame tracking will remain reliable.
-        // Switching every second also changes the head-pose reference.
-        return [...faces, ...fullFaces.filter(f => !faces.some(g => sameFaceBox(f, g)))];
-      }
-      // Retry this region at the incoming cadence after a brief missed frame.
-      // Do not turn one miss into a center/left/right search taking 500–750ms.
-      // Only current detections are returned; this is not a cached face hold.
-      if (now - this.lastCropSeen < 800) {
-        this.mode = "recovery-wait";
-        return fullFaces;
-      }
-      this.crop = null;
-      if (fullFaces.length) { this.mode = "full"; return fullFaces; }
-      if (!checkedFull) {
-        const faces = infer(input);
-        this.lastFull = now;
-        if (faces.length) { this.mode = "full"; return faces; }
-      }
-    }
-    this.mode = "search";
-    if (now - this.lastSearch < 250) return [];
-    this.lastSearch = now;
-    const crop = recoverySearchCrop(width, height, this.nextTile++);
-    const faces = scan(crop);
-    if (faces.length) { this.crop = crop; this.lastCropSeen = now; }
+    this.mode='search';
+    if(now-this.lastSearch<250)return [];
+    this.lastSearch=now;
+    const crop=recoverySearchCrop(width,height,this.nextTile++);
+    const faces=relevant(scan(crop));
+    if(faces.length){this.crop=crop;this.lastCropSeen=now;}
     return faces;
   }
 

@@ -11,7 +11,7 @@ import { log } from "./logger";
  * MIMIC   : 고개·표정 따라하기. 메인.
  * EXIT    : 사람이 멀어지거나 사라져 exitHoldMs 경과 → 손 흔들고 퇴장 (exitDurationMs).
  */
-export type State = "IDLE" | "ATTRACT" | "ENTER" | "MIMIC" | "EXIT";
+export type State = "IDLE" | "ATTRACT" | "PREPARE" | "ENTER" | "MIMIC" | "EXIT";
 
 export interface StateSnapshot {
   state: State;
@@ -27,7 +27,7 @@ export class MimicStateMachine {
   private awayAt: number | null = null; // near=false 가 된 시점
   private listeners: Array<(from: State, to: State) => void> = [];
 
-  constructor(private cfg: Config) {}
+  constructor(private cfg: Config, startedAt=0) {this.enteredAt=startedAt;}
 
   onTransition(fn: (from: State, to: State) => void): void {
     this.listeners.push(fn);
@@ -46,14 +46,15 @@ export class MimicStateMachine {
     for (const l of this.listeners) l(from, to);
   }
 
-  update(sig: FaceSignal, nowMs: number, trackedBodyPresent=false): StateSnapshot {
+  update(sig: FaceSignal, nowMs: number, trackedBodyPresent=false, preparing=false): StateSnapshot {
     const p = this.cfg.presence;
     const c = this.cfg.character;
+    if(preparing&&!sig.present&&!trackedBodyPresent)this.go('PREPARE',nowMs);
+    else if(this.state==='PREPARE'&&!preparing&&!sig.present&&!trackedBodyPresent)this.go('IDLE',nowMs);
     const elapsed = nowMs - this.enteredAt;
 
     // 멀어짐 타이머 — MIMIC 중에만 의미 있음
-    const near=(sig.present && (p.mimicOnLock || sig.near)) || (!sig.present && trackedBodyPresent &&
-      (p.mimicOnLock || this.state==="MIMIC" || this.state==="ENTER"));
+    const near=sig.present || trackedBodyPresent;
     if (near) this.awayAt = null;
     else if (this.awayAt === null) this.awayAt = nowMs;
 
@@ -62,6 +63,7 @@ export class MimicStateMachine {
         if (near) this.go("ENTER", nowMs);
         else if (elapsed >= p.attractAfterMs) this.go("ATTRACT", nowMs);
         break;
+      case "PREPARE":
       case "ATTRACT":
         if (near) this.go("ENTER", nowMs);
         break;

@@ -33,6 +33,7 @@ const KEYS = ["shoulderL", "shoulderR", "elbowL", "elbowR", "wristL", "wristR", 
 
 export class BodyProcessor {
   private bank: OneEuroBank;
+  private smoothingEnabled: boolean;
   private lastSeenMs = -Infinity;
   private last: BodyPose | null = null;
   private armState = {
@@ -46,7 +47,12 @@ export class BodyProcessor {
 
   constructor(private cfg: Config) {
     const b = cfg.body;
+    this.smoothingEnabled = !!b.additionalSmoothing;
     this.bank = new OneEuroBank(b.minCutoff, b.beta, cfg.smoothing.dCutoff);
+  }
+
+  private filter(key:string,value:number,t:number,responsive=false):number {
+    return this.smoothingEnabled ? this.bank.filter(key,value,t,responsive) : value;
   }
 
   applySmoothingParams(): void {
@@ -95,6 +101,10 @@ export class BodyProcessor {
    * last accepted pose briefly; out-of-frame/invalid arm samples below still
    * release independently. Neither empty results nor render ticks renew it. */
   update(raw: RawPose | null, fresh: boolean, nowMs: number): BodyPose | null {
+    if(this.smoothingEnabled!==!!this.cfg.body.additionalSmoothing){
+      this.smoothingEnabled=!!this.cfg.body.additionalSmoothing;
+      this.bank.reset(); // Re-enabling starts from the current sample, not old history.
+    }
     const dropoutHold = Math.min(450, this.cfg.body.lostHoldMs);
     if (!fresh || !raw) {
       if (nowMs - this.lastSeenMs >= dropoutHold) this.restArms();
@@ -210,7 +220,7 @@ export class BodyProcessor {
       if ((k.startsWith("elbow") || k.startsWith("wrist")) && armConfidence[armSide] < this.cfg.body.minVisibility) continue;
       const p = pts[k];
       const responsive = !!this.cfg.body.responsiveArms && (k.startsWith("elbow") || k.startsWith("wrist"));
-      pts[k] = [this.bank.filter(`${k}x`, p[0], t, responsive), this.bank.filter(`${k}y`, p[1], t, responsive), this.bank.filter(`${k}z`, p[2], t, responsive)];
+      pts[k] = [this.filter(`${k}x`, p[0], t, responsive), this.filter(`${k}y`, p[1], t, responsive), this.filter(`${k}z`, p[2], t, responsive)];
     }
     for (const s of ["L", "R"] as const) {
       if (armConfidence[s] === 0 || held[s]) {
@@ -240,8 +250,8 @@ export class BodyProcessor {
         if(armConfidence[s]<this.cfg.body.minVisibility)continue;
         const palm=imagePalm(raw,side[s][2],index,pinky,mirror,Math.max(.65,this.cfg.body.minVisibility));
         if(palm){
-          hands[`handAcross${s}`]=palm.across.toArray().map((v,i)=>this.bank.filter(`handAcross${s}${i}`,v,t)) as V3;
-          hands[`handDirection${s}`]=palm.forward.toArray().map((v,i)=>this.bank.filter(`handDirection${s}${i}`,v,t)) as V3;
+          hands[`handAcross${s}`]=palm.across.toArray().map((v,i)=>this.filter(`handAcross${s}${i}`,v,t)) as V3;
+          hands[`handDirection${s}`]=palm.forward.toArray().map((v,i)=>this.filter(`handDirection${s}${i}`,v,t)) as V3;
         }
         continue;
       }
@@ -252,12 +262,12 @@ export class BodyProcessor {
       // Finger landmarks observe the palm independently. Correcting the arm's
       // depth must not rotate this plane along with the inferred forearm.
       const spanAligned=new Vector3(...span).divideScalar(length);
-      hands[`handAcross${s}`]=spanAligned.toArray().map((v,i)=>this.bank.filter(`handAcross${s}${i}`,v,t)) as V3;
+      hands[`handAcross${s}`]=spanAligned.toArray().map((v,i)=>this.filter(`handAcross${s}${i}`,v,t)) as V3;
       const wrist=pick(side[s][2]),forward=a.map((v,i)=>(v+b[i])*.5-wrist[i]) as V3;
       const reach=Math.hypot(...forward);
       if(reach>=.025&&reach<=.18){
         const forwardAligned=new Vector3(...forward).divideScalar(reach);
-        hands[`handDirection${s}`]=forwardAligned.toArray().map((v,i)=>this.bank.filter(`handDirection${s}${i}`,v,t)) as V3;
+        hands[`handDirection${s}`]=forwardAligned.toArray().map((v,i)=>this.filter(`handDirection${s}${i}`,v,t)) as V3;
       }
     }
     this.last = {

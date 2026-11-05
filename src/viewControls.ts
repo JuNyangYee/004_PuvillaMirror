@@ -2,6 +2,7 @@ import type {Config} from './config';
 import type {Scene} from './scene';
 import type {Backdrop} from './backdrop';
 import {orbitAngles,resetCameraView} from './cameraView';
+const CONTROLS_HIDDEN_KEY = 'puvilla.controlsHidden';
 const ICON_FULL =
   '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
 const ICON_EXIT_FULL =
@@ -17,6 +18,9 @@ const ICON_BG =
 export function setupViewControls(full:Config,scene:Scene,onChange:()=>void,backdrop:Backdrop|null):void{
   const stage=document.getElementById('stage')!;
   const toolbar=document.getElementById('viewControls')!;
+  try {
+    document.body.classList.toggle('controls-hidden',localStorage.getItem(CONTROLS_HIDDEN_KEY)==='1');
+  } catch { /* Storage may be unavailable; keep controls usable. */ }
   const cfg=full.scene;
   const button=(id:string,label:string,icon:string,order:number)=>{
     const b=document.createElement('button');b.type='button';b.id=id;b.className='view-control';
@@ -130,6 +134,7 @@ export function setupViewControls(full:Config,scene:Scene,onChange:()=>void,back
     if(e.key.toLowerCase()!=='f'||e.repeat||e.isComposing||e.ctrlKey||e.metaKey||e.altKey)return;
     if(e.target instanceof HTMLElement&&(e.target.isContentEditable||e.target.closest('input,textarea,select')))return;
     e.preventDefault();const hidden=document.body.classList.toggle('controls-hidden');
+    try { localStorage.setItem(CONTROLS_HIDDEN_KEY,hidden?'1':'0'); } catch { /* Keep the toggle working without storage. */ }
     if(hidden){panelOpen=false;showPanel();if(document.activeElement instanceof HTMLElement&&document.activeElement.closest('.view-control'))document.activeElement.blur();}
   });
   // ── 확대·축소·이동 ──

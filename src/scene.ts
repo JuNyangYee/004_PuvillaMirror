@@ -7,7 +7,7 @@ import { PaintFilter } from "./paintFilter";
 import { OilStrokeFilter } from "./oilFilter";
 import {portraitViewport, PORTRAIT_ASPECT} from "./presentation";
 import {GroundedBackdrop} from "./groundedBackdrop";
-import {applyCameraView, CAMERA_FOV} from "./cameraView";
+import {applyCameraView, centerFeetInView, CAMERA_FOV} from "./cameraView";
 import type {Backdrop} from "./backdrop";
 import {lightPosition} from "./lighting";
 import {Snowfall} from "./snowfall";
@@ -23,7 +23,7 @@ export class Scene {
   readonly characterOutput = new THREE.Group();
   readonly camera: THREE.PerspectiveCamera;
   private onLost: (() => void) | null = null;
-  private lights!: { key: THREE.DirectionalLight; fill: THREE.DirectionalLight; rim: THREE.DirectionalLight; hemi: THREE.HemisphereLight };
+  private lights!: { key: THREE.DirectionalLight; fill: THREE.DirectionalLight; rim: THREE.DirectionalLight; bounce: THREE.DirectionalLight; hemi: THREE.HemisphereLight };
 
   private grounded:GroundedBackdrop;
   private snow:Snowfall;
@@ -39,18 +39,22 @@ export class Scene {
 
   /** 오버레이에서 조명 값을 바꿨을 때 */
   applyLighting(): void {
+    this.grounded.applyShadow(this.cfg.groundShadow);
     const winter=this.winterLighting;
-    for(const role of ["key","fill","rim"] as const){
+    for(const role of ["key","fill","rim","bounce"] as const){
       this.lights[role].position.set(...lightPosition(this.cfg.lightDirections[role]));
     }
-    this.lights.key.color.set(winter ? '#ffe0b4' : '#ffffff');
-    this.lights.fill.color.set(winter ? '#9bbcff' : '#ffffff');
-    this.lights.rim.color.set(winter ? '#91aaff' : '#ffffff');
-    this.lights.hemi.color.set(winter ? '#b5caff' : '#ffffff');
-    this.lights.hemi.groundColor.set(winter ? '#e8d7ce' : '#d8d8d8');
+    const colors=this.cfg.winterLightColors;
+    this.lights.key.color.set(winter ? colors.key : '#ffffff');
+    this.lights.fill.color.set(winter ? colors.fill : '#ffffff');
+    this.lights.rim.color.set(winter ? colors.rim : '#ffffff');
+    this.lights.bounce.color.set(winter ? colors.bounce : '#ffffff');
+    this.lights.hemi.color.set(winter ? colors.sky : '#ffffff');
+    this.lights.hemi.groundColor.set(winter ? colors.ground : '#d8d8d8');
     this.lights.key.intensity = this.cfg.keyLight;
     this.lights.fill.intensity = this.cfg.fillLight;
     this.lights.rim.intensity = this.cfg.rimLight;
+    this.lights.bounce.intensity = winter ? this.cfg.bounceLight : 0;
     this.lights.hemi.intensity = this.cfg.hemiLight;
     this.scene.environmentIntensity = this.cfg.envLight;
     this.renderer.toneMappingExposure = this.cfg.exposure;
@@ -94,10 +98,11 @@ export class Scene {
     const key = new THREE.DirectionalLight(0xffffff, cfg.keyLight);
     const fill = new THREE.DirectionalLight(0xffffff, cfg.fillLight);
     const rim = new THREE.DirectionalLight(0xffffff, cfg.rimLight);
+    const bounce = new THREE.DirectionalLight(0xffffff, cfg.bounceLight);
     // 가이드 2.4 그림자는 중립 회색 (살구빛 바닥 반사를 넣으면 털이 분홍빛으로 물듦)
     const hemi = new THREE.HemisphereLight(0xffffff, 0xd8d8d8, cfg.hemiLight);
-    this.scene.add(key, fill, rim, hemi);
-    this.lights = { key, fill, rim, hemi };
+    this.scene.add(key, fill, rim, bounce, hemi);
+    this.lights = { key, fill, rim, bounce, hemi };
     this.applyLighting();
 
     this.resize();
@@ -137,10 +142,14 @@ export class Scene {
       : { center: c.viewCenterCm, height: c.viewHeightCm, offsetX: c.viewOffsetXcm };
   }
 
+  centerFeetInView(): void {
+    centerFeetInView(this.camera,this.cfg,this.ch.modelScale,this.ch.focusYcm);
+  }
+
   setView(v: { center: number; height: number; offsetX: number }): void {
     const c = this.cfg;
     const height = Math.min(260, Math.max(25, v.height));
-    const center = Math.min(220, Math.max(20, v.center));
+    const center = Math.min(220, Math.max(-100, v.center));
     const offsetX = Math.min(80, Math.max(-80, v.offsetX));
     if (this.portrait) Object.assign(c, { pViewCenterCm: center, pViewHeightCm: height, pViewOffsetXcm: offsetX });
     else Object.assign(c, { viewCenterCm: center, viewHeightCm: height, viewOffsetXcm: offsetX });

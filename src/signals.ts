@@ -3,12 +3,11 @@ import type { RawFace, TrackResult } from "./tracker";
 import { OneEuro, OneEuroBank } from "./smoothing";
 import { log } from "./logger";
 import { FaceNeutral } from "./faceNeutral";
-import type { ZoneFace } from "./lockZone";
 import { faceMatchesHint, type FaceHint } from "./faceRecovery";
 
 export type Expression = "neutral" | "smile" | "surprise";
 
-/** 스무딩·타깃 선택·접근 판정을 거친, 캐릭터가 바로 쓰는 신호 */
+/** YOLO가 선택한 한 사람의 얼굴 신호를 스무딩한다. */
 export interface FaceSignal {
   present: boolean; // 추적 대상 얼굴이 있음(홀드 포함)
   near: boolean; // 접근 판정(히스테리시스 적용)
@@ -50,7 +49,6 @@ export class SignalProcessor {
   private near = false;
   private lastSeenMs = -Infinity;
   private lastObservationMs = -Infinity;
-  private lockMissSinceMs = 0; // 락온 대상을 못 찾기 시작한 시각
   private lastFaces: RawFace[] = [];
   private lastTargetBox: RawFace["bbox"] | null = null;
   private lastTarget: { cx: number; cy: number; h: number } | null = null;
@@ -82,103 +80,14 @@ export class SignalProcessor {
     this.blinkFilters.setParams(s.blinkMinCutoff, 0.5, s.dCutoff);
   }
 
-  /** 얼굴 중심이 락온 영역 안인가 (영역은 화면에 보이는 = 미러 반영 좌표) */
-  private inZone(f: RawFace): boolean {
-    const z = this.cfg.presence.lockZone;
-    const x = this.cfg.camera.mirror ? 1 - f.bbox.cx : f.bbox.cx;
-    return x >= z.x && x <= z.x + z.w && f.bbox.cy >= z.y && f.bbox.cy <= z.y + z.h;
+  /** Current/held face outline for diagnostic traces only; never selects a person. */
+  get debugFaces() {
+    if(this.lastFaces.length===1){const f=this.lastFaces[0];return [{...f.bbox,x:this.cfg.camera.mirror?1-f.bbox.x-f.bbox.w:f.bbox.x,selected:true,held:false}];}
+    const b=this.lastTargetBox;
+    return this.lastTarget&&b?[{...b,x:this.cfg.camera.mirror?1-b.x-b.w:b.x,selected:false,held:true}]:[];
   }
 
-  /** 이미 잡힌 사람 유지 조건: 얼굴 박스가 영역에 조금이라도 걸쳐 있으면 OK (중심만 보면 경계 근처에서 계속 풀림) */
-  private touchesZone(f: RawFace): boolean {
-    const z = this.cfg.presence.lockZone;
-    const x0 = this.cfg.camera.mirror ? 1 - f.bbox.x - f.bbox.w : f.bbox.x;
-    return x0 < z.x + z.w && x0 + f.bbox.w > z.x && f.bbox.y < z.y + z.h && f.bbox.y + f.bbox.h > z.y;
-  }
-
-  /**
-   * 락온. 한 명을 잡으면 그 사람이 락온 영역 안에 있는 동안 계속 유지한다 (뒤에 누가 들어와도 안 바뀜).
-   * - 이어 추적: 직전 대상과 위치·크기가 가장 비슷한 얼굴
-   * - 대상의 얼굴 박스가 영역에서 완전히 벗어나거나 안 보인 지 faceLostHoldMs 가 지나면 해제 → 영역 안에서 새로 찾음
-   * - 새로 찾을 때: 영역 안 얼굴 중 '가까움(얼굴 크기) × 영역 중심에 가까움' 점수가 가장 높은 사람
-   */
-  private pickTarget(faces: RawFace[], nowMs: number, imageAspect: number): RawFace | null {
-    const p = this.cfg.presence;
-    if (this.lastTarget) {
-      const lt = this.lastTarget;
-      // Compare in pixel-isotropic coordinates (both axes / image height).
-      // Raw normalized x is too strict for portrait footage and too loose
-      // for landscape. After a brief occlusion allow bounded movement, not
-      // an unrestricted switch to whichever face remains.
-      const gap = Math.max(0, nowMs - this.lastSeenMs);
-      const radius = Math.max(0.05, lt.h * (0.5 + Math.min(0.5, gap / 800)));
-      const candidates = faces.map(f => {
-        const ratio = f.bbox.h / lt.h;
-        const distance = Math.hypot((f.bbox.cx - lt.cx) * imageAspect, f.bbox.cy - lt.cy);
-        return { f, ratio, distance, score: distance / lt.h + Math.abs(Math.log(ratio)) * 0.25 };
-      }).filter(c => c.ratio >= 0.65 && c.ratio <= 1.5 && c.distance < radius && this.touchesZone(c.f))
-        .sort((a, b) => a.score - b.score);
-      const match = candidates.length && (candidates.length === 1 || candidates[1].score - candidates[0].score > 0.2)
-        ? candidates[0].f : null;
-      if (match) {
-        this.lockMissSinceMs = 0;
-        this.lastTarget = { cx: match.bbox.cx, cy: match.bbox.cy, h: match.bbox.h };
-        this.lastTargetBox = match.bbox;
-        return match;
-      }
-      // 잠깐 놓친 동안은 다른 사람으로 바꾸지 않는다
-      if (this.lockMissSinceMs === 0) this.lockMissSinceMs = nowMs;
-      if (nowMs - this.lockMissSinceMs < p.faceLostHoldMs) return null;
-      log.info("signal", "lock released (영역 이탈/소실)");
-      this.lastTarget = null;
-      this.lockMissSinceMs = 0;
-    }
-    const z = p.lockZone;
-    const zcx = z.x + z.w / 2, zcy = z.y + z.h / 2, half = Math.hypot(z.w, z.h) / 2;
-    let pick: RawFace | null = null, bestScore = -Infinity;
-    for (const f of faces) {
-      if (!this.inZone(f)) continue;
-      const x = this.cfg.camera.mirror ? 1 - f.bbox.cx : f.bbox.cx;
-      const dc = Math.min(1, Math.hypot(x - zcx, f.bbox.cy - zcy) / half);
-      // Direct mimic chooses the largest visible face inside the operator's
-      // zone. A centrality preference must not make a smaller bystander win.
-      const score = p.mimicOnLock ? f.bbox.w * f.bbox.h
-        : f.bbox.h * (1 - p.lockCenterWeight * dc);
-      if (score > bestScore) {
-        bestScore = score;
-        pick = f;
-      }
-    }
-    if (pick) {
-      this.resetFilters();
-      log.info("signal", `lock on h=${pick.bbox.h.toFixed(2)} cx=${pick.bbox.cx.toFixed(2)} (후보 ${faces.filter((f) => this.inZone(f)).length}명)`);
-      this.lastTarget = { cx: pick.bbox.cx, cy: pick.bbox.cy, h: pick.bbox.h };
-      this.lastTargetBox = pick.bbox;
-      this.lockMissSinceMs = 0;
-    }
-    return pick;
-  }
-
-  /** 오버레이(락온 영역 편집기) 표시용: 화면 좌표(미러 반영)의 얼굴 박스 */
-  get debugFaces(): ZoneFace[] {
-    const lt = this.lastTarget;
-    const faces: ZoneFace[] = this.lastFaces.map((f) => ({
-      x: this.cfg.camera.mirror ? 1 - f.bbox.x - f.bbox.w : f.bbox.x,
-      y: f.bbox.y, w: f.bbox.w, h: f.bbox.h,
-      locked: !!lt && Math.abs(f.bbox.cx - lt.cx) < 1e-6 && Math.abs(f.bbox.cy - lt.cy) < 1e-6,
-      inZone: this.inZone(f),
-    }));
-    const b = this.lastTargetBox;
-    if (lt && b && !faces.some(f => f.locked)) {
-      faces.push({
-        x: this.cfg.camera.mirror ? 1 - b.x - b.w : b.x,
-        y: b.y, w: b.w, h: b.h, locked: false, inZone: true, held: true,
-      });
-    }
-    return faces;
-  }
-
-  /** 현재 대상 얼굴 (카메라 원본 좌표, 미러 전). 상반신 Pose 를 같은 사람으로 고를 때 사용 */
+  /** 최근 얼굴 관측 (카메라 원본 좌표, 미러 전). 진단용이며 대상 선택에 쓰지 않는다 */
   get target(): { cx: number; cy: number; h: number } | null {
     return this.lastTarget;
   }
@@ -194,23 +103,17 @@ export class SignalProcessor {
     const age = nowMs - observedAt;
     const timely = Number.isFinite(age) && age >= 0 && age < p.faceLostHoldMs;
     // Repeated renders of a cached result are not new camera observations.
-    // Show a held outline when inference itself stalls, without extending lock.
+    // Show a held outline when inference stalls, without extending presence.
     this.lastFaces = timely && age < 250 ? track.faces : [];
     const aspect = Number.isFinite(imageAspect) && imageAspect > 0 ? imageAspect : 1;
-    let target: RawFace | null = null;
-    if (fresh && timely && hint) {
-      // Body continuity has already selected the person. Do not apply a second
-      // stationary face-box gate that rejects a nod or a tilted face.
-      const candidates=track.faces.map(f=>({f,d:Math.hypot((f.bbox.cx-hint.cx)*aspect,f.bbox.cy-hint.cy)}))
-        .sort((a,b)=>a.d-b.d);
-      if (candidates.length===1 || candidates.length>1 && candidates[1].d-candidates[0].d>hint.size*.1)
-        target=candidates[0].f;
-      if (target) {
-        if (!this.lastTarget) this.resetFilters();
-        this.lastTarget={cx:target.bbox.cx,cy:target.bbox.cy,h:target.bbox.h};
-        this.lastTargetBox=target.bbox;this.lockMissSinceMs=0;
-      }
-    } else if (fresh && timely) target=this.pickTarget(track.faces,nowMs,aspect);
+    // FaceLandmarker is configured for one face in the selected person's ROI.
+    // The owner (main/YOLO) resets this processor when the person changes.
+    const target = fresh && timely && track.faces.length===1 ? track.faces[0] : null;
+    if(target){
+      if(!this.lastTarget)this.resetFilters();
+      this.lastTarget={cx:target.bbox.cx,cy:target.bbox.cy,h:target.bbox.h};
+      this.lastTargetBox=target.bbox;
+    }
 
     if (target) {
       this.lastSeenMs = observedAt;
@@ -219,7 +122,7 @@ export class SignalProcessor {
       const pitch = this.fPitch.filter(this.cfg.mapping.autoNeutral ? this.neutral.pitch(target.pitch) : target.pitch, t);
       const roll = this.fRoll.filter(target.roll * mirror, t);
       // Preserve landscape distance tuning while using the short side for a
-      // portrait source. Otherwise a locked portrait face can never enter
+      // portrait source. Otherwise a portrait face can never enter
       // MIMIC at the same framing: its normalized height is much smaller.
       const shortSide = Math.min(1, aspect);
       const bboxH = this.fBbox.filter(target.bbox.h / shortSide, t);
@@ -246,13 +149,7 @@ export class SignalProcessor {
         blend.__blinkRelRight = this.neutral.blink(blend.__earRight, this.cfg.camera.mirror ? "left" : "right");
       }
 
-      // 접근 히스테리시스 + 화면 중앙 근처 조건
-      const centered = Math.abs(cx - 0.5) <= p.centerToleranceX;
-      // Acquisition still requires the center band. An acquired visitor
-      // remains centered while their face overlaps it, avoiding edge chatter.
-      const centeredHeld = Math.abs(cx - 0.5) <= p.centerToleranceX + target.bbox.w * 0.5;
-      if (!this.near && bboxH >= p.enterBboxHeight && centered) this.near = true;
-      else if (this.near && (bboxH <= p.exitBboxHeight || !centeredHeld)) this.near = false;
+      this.near = true;
 
       this.sig = {
         present: true,

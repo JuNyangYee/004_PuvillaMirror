@@ -1,6 +1,8 @@
 import {DEFAULT_PERSON, type PersonOptions} from "./personSelection";
+import {DEFAULT_RECOGNITION, type RecognitionOptions} from "./recognitionGate";
+import type {GroundShadowOptions} from "./groundedBackdrop";
 import {enforcePresentation} from "./presentation";
-import {DEFAULT_LIGHT_DIRECTIONS, type LightDirections} from "./lighting";
+import {DEFAULT_LIGHT_DIRECTIONS, DEFAULT_WINTER_LIGHT_COLORS, type LightDirections, type WinterLightColors} from "./lighting";
 import { isEmbedded } from "./embedded";
 /**
  * 런타임 설정. public/config.json 을 로드해 기본값과 병합한다.
@@ -45,8 +47,8 @@ export interface Config {
     useWorker: boolean;
   };
   person: PersonOptions;
-  recognition: { confirmMs:number };
-  debugVision: { yoloBoxes:boolean; inputRegion:boolean; bodyPoints:boolean; faceLandmarks:boolean };
+  recognition: RecognitionOptions;
+  debugVision: { recognitionRange:boolean; yoloBoxes:boolean; inputRegion:boolean; bodyPoints:boolean; faceLandmarks:boolean };
   smoothing: {
     headMinCutoff: number;
     headBeta: number;
@@ -57,19 +59,9 @@ export interface Config {
     dCutoff: number;
   };
   presence: {
-    /** 락온 영역에서 얼굴을 잡으면 거리 문턱 없이 미믹 시작. */
-    mimicOnLock: boolean;
-    /** 얼굴 높이 / 입력 영상의 짧은 변. 가로 입력에서는 기존 화면 높이 비율과 같다. */
-    enterBboxHeight: number;
-    exitBboxHeight: number;
-    centerToleranceX: number;
     faceLostHoldMs: number;
     exitHoldMs: number;
     attractAfterMs: number;
-    /** 락온 영역 (화면에 보이는 좌표 0~1, 미러 반영). 이 안의 사람만 잡고, 잡은 사람은 이 안에 있는 동안 유지 */
-    lockZone: { x: number; y: number; w: number; h: number };
-    /** 새로 잡을 때 '영역 중심에 가까움' 가중 (0 = 크기(가까움)만, 1 = 중심 강하게) */
-    lockCenterWeight: number;
   };
   mapping: {
     yawGain: number;
@@ -266,6 +258,8 @@ export interface Config {
     minVisibility: number;
     /** 상반신이 안 보여도 이 시간(ms)은 마지막 자세 유지 */
     lostHoldMs: number;
+    /** Extra filtering after MediaPipe; disable to compare its native smoothing. */
+    additionalSmoothing: boolean;
     minCutoff: number;
     responsiveArms: boolean;
     beta: number;
@@ -312,10 +306,13 @@ export interface Config {
     cameraYawDeg: number;
     /** 주광·보조광·테두리광의 장면 기준 방향. */
     lightDirections: LightDirections;
+    winterLightColors: WinterLightColors;
     /** 조명 세기 및 주변광·환경 반사. */
     keyLight: number;
     fillLight: number;
     rimLight: number;
+    /** 눈밭에서 아래쪽으로 반사되어 들어오는 약한 보조광 (겨울 배경). */
+    bounceLight: number;
     hemiLight: number;
     envLight: number;
     /** 화면 방향: auto = 기기 방향 따라(세로로 든 폰 = 세로 구도), 가로 / 세로 고정. 왼쪽 아래 버튼으로 전환하면 그 기기에선 고정 */
@@ -336,6 +333,8 @@ export interface Config {
     pViewOffsetXcm: number;
     /** 겨울 배경에만 내리는 눈: 켜기 · 양(×, 0~2) · 떨어지는 속도(×) */
     snow: { enabled: boolean; amount: number; speed: number };
+    /** 겨울 사진 바닥 위의 투명 접지 그림자. 크기는 기본 발밑 그림자 대비 배율. */
+    groundShadow: GroundShadowOptions;
   };
   /** 의상: classic = 기존 줄무늬 스카프 / christmas = 뜨개 목도리(새 FBX). 오른쪽 아래 아이콘으로 전환 */
   outfit: {
@@ -465,20 +464,10 @@ export const DEFAULT_CONFIG: Config = {
     useWorker: true,
   },
   person: {...DEFAULT_PERSON},
-  recognition: {confirmMs:350},
-  debugVision: {yoloBoxes:true,inputRegion:true,bodyPoints:false,faceLandmarks:false},
+  recognition: structuredClone(DEFAULT_RECOGNITION),
+  debugVision: {recognitionRange:true,yoloBoxes:true,inputRegion:true,bodyPoints:false,faceLandmarks:false},
   smoothing: { headMinCutoff: 1.0, headBeta: 0.05, blendMinCutoff: 1.5, blendBeta: 0.1, blinkMinCutoff: 6, dCutoff: 1.0 },
-  presence: {
-    mimicOnLock: true,
-    enterBboxHeight: 0.22,
-    exitBboxHeight: 0.15,
-    centerToleranceX: 0.35,
-    faceLostHoldMs: 600,
-    exitHoldMs: 1500,
-    attractAfterMs: 8000,
-    lockZone: { x: 0.3, y: 0.3, w: 0.4, h: 0.4 },
-    lockCenterWeight: 0.6,
-  },
+  presence: { faceLostHoldMs: 600, exitHoldMs: 1500, attractAfterMs: 8000 },
   mapping: {
     yawGain: 1.2,
     pitchGain: 1.0,
@@ -597,6 +586,7 @@ export const DEFAULT_CONFIG: Config = {
     enabled: false,
     minVisibility: 0.5,
     lostHoldMs: 500,
+    additionalSmoothing: true,
     minCutoff: 1.2,
     responsiveArms: true,
     beta: 0.3,
@@ -624,12 +614,14 @@ export const DEFAULT_CONFIG: Config = {
     armFollowPose: true,
   },
   scene: {
-    bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 0.88, cameraTiltDeg: -6, cameraYawDeg: 0,
-    keyLight: 1.4, fillLight: 0.55, rimLight: 1.1, hemiLight: 0.8, envLight: 0.3,
+    bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 0.96, cameraTiltDeg: -6, cameraYawDeg: 0,
+    keyLight: 2.3, fillLight: 1.45, rimLight: 2.1, bounceLight: 0.5, hemiLight: 1, envLight: 0.08,
     lightDirections: structuredClone(DEFAULT_LIGHT_DIRECTIONS),
+    winterLightColors: structuredClone(DEFAULT_WINTER_LIGHT_COLORS),
     layout: "portrait", outputMirror: false, aspect: 9 / 16, viewCenterCm: 133, viewHeightCm: 90, viewOffsetXcm: 0,
     pViewCenterCm: 95, pViewHeightCm: 250, pViewOffsetXcm: 0, centerLongScreens: false,
     snow: { enabled: true, amount: 1, speed: 1 },
+    groundShadow: { enabled: true, opacity: .65, width: 1.2, depth: 1.6, softness: 1.4, contact: .85 },
   },
   outfit: {
     style: "christmas", // 고정: 서 있는 푸빌라 + 뜨개 목도리
@@ -642,7 +634,7 @@ export const DEFAULT_CONFIG: Config = {
     },
   },
   filter: { enabled: false, style: "soft", softColor: 0.06, edgeLo: 0.12, edgeHi: 0.6, radiusPx: 5, hardness: 8, edgeSharpness: 8, sharpen: 0.6, posterLevels: 0,
-    oil: { enabled: true, strength: 0.3, size: 1.4, boil: 0.05, fps: 12, shortSide: 1080, res: 1, grade: 1, split: 0 } },
+    oil: { enabled: true, strength: 0.2, size: 0.9, boil: 0.05, fps: 12, shortSide: 1080, res: 1, grade: 1, split: 0 } },
   quality: { startLevel: 0, auto: true, minFps: 45, minInferFps: 12, mobileCameraWidth: 640, mobileCameraHeight: 480 },
   kiosk: { hideCursor: true, wakeLock: true, reloadOnFatalMs: 5000, healthPostUrl: "", healthIntervalMs: 10000 },
 };
@@ -683,6 +675,14 @@ function diff(cur: unknown, base: unknown): unknown {
   return JSON.stringify(cur) === JSON.stringify(base) ? undefined : cur;
 }
 
+/** Ignore obsolete controls in old saved configurations. YOLO owns person selection. */
+export function removeLegacyRecognition(cfg: Config): Config {
+  const presence=cfg.presence as unknown as Record<string,unknown>;
+  for(const key of ['mimicOnLock','lockZone','lockCenterWeight','enterBboxHeight','exitBboxHeight','centerToleranceX'])delete presence[key];
+  delete (cfg.person as unknown as Record<string,unknown>).criterion;
+  return cfg;
+}
+
 export async function loadConfig(url = "./config.json"): Promise<Config> {
   try {
     const res = await fetch(`${url}?t=${Date.now()}`, { cache: "no-store" });
@@ -699,7 +699,7 @@ export async function loadConfig(url = "./config.json"): Promise<Config> {
         /* 저장소 막힘 → 배포 설정 그대로 */
       }
     }
-    return enforcePresentation(cfg);
+    return enforcePresentation(removeLegacyRecognition(cfg));
   } catch (e) {
     console.warn("[config] config.json 로드 실패, 기본값 사용:", e);
     return enforcePresentation(structuredClone(DEFAULT_CONFIG));
@@ -707,7 +707,7 @@ export async function loadConfig(url = "./config.json"): Promise<Config> {
 }
 
 const CONFIG_COMMENT =
-  "런타임 튜닝값. 코드가 아니라 여기서 바꾼다. 개발 서버(npm run dev)에서는 오버레이(d 키)·락온 영역 편집이 이 파일에 자동 저장된다.";
+  "런타임 튜닝값. 코드가 아니라 여기서 바꾼다. 개발 서버(npm run dev)에서는 설정(d 키) 변경이 이 파일에 자동 저장된다.";
 
 /**
  * 튜닝값을 public/config.json 에 저장 (개발 서버의 /__mimic/save-config).

@@ -3,39 +3,20 @@ import type {PersonBox} from "./personSelection";
 import type {InferenceRegion} from "./inferenceRegion";
 import type {RawPose} from "./poseTracker";
 import type {RawFace} from "./tracker";
+import {marginHandle,dragMargins,type Margins,type MarginHandle} from './recognitionMargins';
 import type { Config } from "./config";
 
-export interface ZoneFace {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  locked: boolean;
-  inZone: boolean;
-  held?: boolean;
-  body?: boolean;
-  pending?: boolean;
-}
-
-export interface VisionDebug {boxes:PersonBox[];selected:PersonBox|null;region:InferenceRegion|null;poses:RawPose[];faces:RawFace[];status:string}
+export interface VisionDebug {boxes:PersonBox[];selected:PersonBox|null;region:InferenceRegion|null;poses:RawPose[];faces:RawFace[];status:string;detail?:string;stage?:number;challenger?:PersonBox|null;switchProgress?:number}
 const POSE_LINKS=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[15,17],[15,19],[16,18],[16,20]];
-type Mode = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw" | null;
-
-/**
- * 락온 영역 편집기 (개발용, `d` 키 오버레이와 같이 보임/숨김).
- * 오른쪽 아래 카메라 미리보기를 키우고 그 위에 노란 박스(락온 영역)와 얼굴 박스를 그린다.
- *   - 박스 안을 끌면 이동, 가장자리/모서리를 끌면 크기 조절
- *   - 초록 = 락온된 사람, 흰색 = 영역 안 다른 사람, 회색 = 영역 밖
- * 값은 cfg.presence.lockZone 을 직접 바꾼다 → 즉시 반영, '저장'으로 config.json 에 남김.
- */
-export class LockZoneEditor {
+/** Developer camera preview with draggable recognition margins. */
+export class CameraPreview {
   private wrap: HTMLDivElement;
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  private mode: Mode = null;
-  private start = { x: 0, y: 0, z: { x: 0, y: 0, w: 0, h: 0 } };
+  private status: HTMLDivElement;
+  private drag: {id:number;x:number;y:number;start:Margins;handle:MarginHandle}|null=null;
 
-  /** 드래그를 놓았을 때 (자동 저장용) */
+  /** Camera exposure or recognition margins changed (auto-save). */
   onChange: (() => void) | null = null;
 
   constructor(private cfg: Config, video: HTMLVideoElement | HTMLCanvasElement, hasCamera: boolean) {
@@ -66,92 +47,61 @@ export class LockZoneEditor {
       fitSource();
     } else {
       const note = document.createElement("div");
-      note.textContent = "카메라 없음 (sim) — 락온 영역만 편집 가능";
+      note.textContent = "카메라 없음 (시뮬레이션)";
       note.style.cssText = "position:absolute;left:8px;top:6px;color:#888;font:12px system-ui";
       view.appendChild(note);
     }
     this.canvas = document.createElement("canvas");
-    this.canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;cursor:crosshair";
+    this.canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none";
     view.appendChild(this.canvas);
+    this.status=document.createElement('div');
+    this.status.style.cssText='padding:5px 6px;color:#fff;font:11px/1.5 system-ui;white-space:pre-line';
+    this.wrap.appendChild(this.status);
     if (hasCamera) this.buildExposureControls();
     this.ctx = this.canvas.getContext("2d")!;
+    this.setupMarginDrag();
 
-    this.canvas.addEventListener("pointerdown", (e) => this.down(e));
-    this.canvas.addEventListener("pointermove", (e) => this.move(e));
-    const up = (e: PointerEvent) => {
-      if (this.mode) {
-        this.canvas.releasePointerCapture(e.pointerId);
-        this.onChange?.();
-      }
-      this.mode = null;
-    };
-    this.canvas.addEventListener("pointerup", up);
-    this.canvas.addEventListener("pointercancel", up);
   }
 
-  private norm(e: PointerEvent): { x: number; y: number } {
-    const r = this.canvas.getBoundingClientRect();
-    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  private canEditMargins():boolean {
+    return this.cfg.debugVision.recognitionRange&&!document.body.classList.contains('debug-hidden')&&!document.body.classList.contains('kiosk');
   }
 
-  private hit(p: { x: number; y: number }): Mode {
-    const z = this.cfg.presence.lockZone;
-    const r = this.canvas.getBoundingClientRect();
-    const tx = 10 / r.width, ty = 10 / r.height;
-    const nearL = Math.abs(p.x - z.x) < tx, nearR = Math.abs(p.x - (z.x + z.w)) < tx;
-    const nearT = Math.abs(p.y - z.y) < ty, nearB = Math.abs(p.y - (z.y + z.h)) < ty;
-    const insideX = p.x > z.x - tx && p.x < z.x + z.w + tx;
-    const insideY = p.y > z.y - ty && p.y < z.y + z.h + ty;
-    if (nearT && nearL) return "nw";
-    if (nearT && nearR) return "ne";
-    if (nearB && nearL) return "sw";
-    if (nearB && nearR) return "se";
-    if (nearT && insideX) return "n";
-    if (nearB && insideX) return "s";
-    if (nearL && insideY) return "w";
-    if (nearR && insideY) return "e";
-    if (p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h) return "move";
-    return null;
+  private finishDrag():void {
+    const drag=this.drag;if(!drag)return;
+    this.drag=null;
+    if(this.canvas.hasPointerCapture(drag.id))this.canvas.releasePointerCapture(drag.id);
+    if(Object.keys(drag.start).some(k=>drag.start[k as keyof Margins]!==this.cfg.recognition.margins[k as keyof Margins]))this.onChange?.();
   }
 
-  private down(e: PointerEvent): void {
-    const p = this.norm(e);
-    this.mode = this.hit(p);
-    if (!this.mode) return;
-    this.canvas.setPointerCapture(e.pointerId);
-    this.start = { x: p.x, y: p.y, z: { ...this.cfg.presence.lockZone } };
+  private setupMarginDrag():void {
+    const canvas=this.canvas;
+    canvas.title='가장자리·모서리: 마진 조절 / 안쪽: 범위 이동';
+    const cursor=(h:MarginHandle|null)=>h==='move'?'move':h==='n'||h==='s'?'ns-resize':h==='e'||h==='w'?'ew-resize':h==='ne'||h==='sw'?'nesw-resize':h?'nwse-resize':'default';
+    canvas.addEventListener('pointerdown',e=>{
+      if(!this.canEditMargins()||e.button!==0||this.drag)return;
+      const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+      const handle=marginHandle(this.cfg.recognition.margins,x,y,r.width,r.height);
+      if(!handle)return;
+      this.drag={id:e.pointerId,x:x/r.width,y:y/r.height,start:{...this.cfg.recognition.margins},handle};
+      canvas.setPointerCapture(e.pointerId);canvas.style.cursor=cursor(handle);e.preventDefault();e.stopPropagation();
+    });
+    canvas.addEventListener('pointermove',e=>{
+      if(!this.canEditMargins()){this.finishDrag();return;}
+      const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+      if(this.drag){
+        if(e.pointerId!==this.drag.id||!r.width||!r.height)return;
+        Object.assign(this.cfg.recognition.margins,dragMargins(this.drag.start,this.drag.handle,x/r.width-this.drag.x,y/r.height-this.drag.y));
+        e.preventDefault();
+      }else canvas.style.cursor=cursor(marginHandle(this.cfg.recognition.margins,x,y,r.width,r.height));
+    });
+    for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,e=>{
+      if((e as PointerEvent).pointerId===this.drag?.id)this.finishDrag();
+    });
+    window.addEventListener('blur',()=>this.finishDrag());
   }
 
-  private move(e: PointerEvent): void {
-    const p = this.norm(e);
-    if (!this.mode) {
-      const m = this.hit(p);
-      this.canvas.style.cursor =
-        m === "move" ? "move" : m === "n" || m === "s" ? "ns-resize" : m === "e" || m === "w" ? "ew-resize"
-        : m === "ne" || m === "sw" ? "nesw-resize" : m === "nw" || m === "se" ? "nwse-resize" : "crosshair";
-      return;
-    }
-    const dx = p.x - this.start.x, dy = p.y - this.start.y;
-    const s = this.start.z;
-    let x0 = s.x, y0 = s.y, x1 = s.x + s.w, y1 = s.y + s.h;
-    const MIN = 0.08;
-    if (this.mode === "move") {
-      const nx = Math.min(1 - s.w, Math.max(0, s.x + dx)), ny = Math.min(1 - s.h, Math.max(0, s.y + dy));
-      x0 = nx; y0 = ny; x1 = nx + s.w; y1 = ny + s.h;
-    } else {
-      if (this.mode.includes("w")) x0 = Math.min(x1 - MIN, Math.max(0, s.x + dx));
-      if (this.mode.includes("e")) x1 = Math.max(x0 + MIN, Math.min(1, s.x + s.w + dx));
-      if (this.mode.includes("n")) y0 = Math.min(y1 - MIN, Math.max(0, s.y + dy));
-      if (this.mode.includes("s")) y1 = Math.max(y0 + MIN, Math.min(1, s.y + s.h + dy));
-    }
-    const z = this.cfg.presence.lockZone;
-    z.x = round3(x0);
-    z.y = round3(y0);
-    z.w = round3(x1 - x0);
-    z.h = round3(y1 - y0);
-  }
-
-  /** 카메라 화면 아래: 노출·밝기 슬라이더 (어두우면 얼굴 인식·락온이 자주 풀림). 카메라가 지원하는 항목만 표시 */
+  /** Camera exposure controls, when supported by the device. */
   private buildExposureControls(): void {
     const track = currentVideoTrack();
     const caps = (track?.getCapabilities?.() ?? {}) as Record<string, { min: number; max: number; step?: number } | string[] | undefined>;
@@ -237,7 +187,10 @@ export class LockZoneEditor {
     refresh();
   }
 
-  draw(faces: ZoneFace[],debug?:VisionDebug): void {
+  draw(debug:VisionDebug): void {
+    const editable=this.canEditMargins();
+    this.canvas.style.pointerEvents=editable?'auto':'none';
+    if(!editable)this.finishDrag();
     if(document.body.classList.contains("debug-hidden")||document.body.classList.contains("kiosk"))return;
     const c = this.canvas, g = this.ctx;
     const W = c.clientWidth, H = c.clientHeight;
@@ -251,6 +204,13 @@ export class LockZoneEditor {
 
     if(debug){
       const flags=this.cfg.debugVision,mirror=this.cfg.camera.mirror;
+      if(flags.recognitionRange){
+        const m=this.cfg.recognition.margins;
+        const x=m.left*W,y=m.top*H,w=(1-m.left-m.right)*W,h=(1-m.top-m.bottom)*H;
+        g.fillStyle='rgba(0,0,0,.3)';g.beginPath();g.rect(0,0,W,H);g.rect(x,y,w,h);g.fill('evenodd');
+        g.strokeStyle=debug.stage===2?'#4eff8c':debug.stage===1?'#ffe16b':'#aab3c4';
+        g.lineWidth=1.5;g.setLineDash([5,4]);g.strokeRect(x,y,w,h);g.setLineDash([]);
+      }
       const px=(x:number)=>(mirror?1-x:x)*W;
       const box=(b:{x:number;y:number;w:number;h:number},color:string,label:string,dashed=false)=>{
         const x=(mirror?1-b.x-b.w:b.x)*W,y=b.y*H;
@@ -258,6 +218,7 @@ export class LockZoneEditor {
         g.strokeRect(x,y,b.w*W,b.h*H);g.setLineDash([]);g.font='11px system-ui';g.fillText(label,x+3,Math.max(12,y+12));
       };
       if(flags.yoloBoxes)for(const b of debug.boxes)box(b,b===debug.selected?'#4eff8c':'#ff9b50','YOLO '+Math.round(b.score*100)+'%'+(b===debug.selected?' · 선택':''));
+      if(flags.yoloBoxes&&debug.challenger)box(debug.challenger,'#ffe16b','전환 대기 '+Math.round((debug.switchProgress??0)*100)+'%');
       if(flags.inputRegion&&debug.region)box(debug.region,'#51d9ff','MediaPipe 입력',true);
       if(flags.bodyPoints)for(const p of debug.poses){
         const pts=p.image;if(!pts)continue;
@@ -267,43 +228,14 @@ export class LockZoneEditor {
         g.fillStyle='#42e9d0';for(let i=0;i<pts.length;i++)if(visible(i)){g.beginPath();g.arc(px(pts[i].x),pts[i].y*H,2.3,0,Math.PI*2);g.fill();}
       }
       if(flags.faceLandmarks){g.fillStyle='#ff82e9';for(const face of debug.faces)for(const p of face.landmarks??[]){g.fillRect(px(p.x)-.7,p.y*H-.7,1.4,1.4);}}
-      g.fillStyle='rgba(0,0,0,.7)';g.fillRect(0,H-22,W,22);g.fillStyle='#fff';g.font='11px system-ui';g.fillText(debug.status,6,H-7,W-12);
-    }
-    // 영역 밖 어둡게
-    const z = this.cfg.presence.lockZone;
-    g.fillStyle = "rgba(0,0,0,0.35)";
-    g.beginPath();
-    g.rect(0, 0, W, H);
-    g.rect(z.x * W, z.y * H, z.w * W, z.h * H);
-    g.fill("evenodd");
-
-    for (const f of faces) {
-      g.lineWidth = f.locked ? 3 : 1.5;
-      g.strokeStyle = f.pending ? "#aaaaaa" : f.held ? "#ffba55" : f.body ? "#56dcff" : f.locked ? "#3ee07a" : f.inZone ? "#ffffff" : "rgba(160,160,160,0.8)";
-      g.setLineDash(f.held ? [4, 4] : []);
-      g.strokeRect(f.x * W, f.y * H, f.w * W, f.h * H);
-      g.setLineDash([]);
-      if (f.locked || f.held || f.body) {
-        g.fillStyle = f.pending ? "#aaaaaa" : f.held ? "#ffba55" : f.body ? "#56dcff" : "#3ee07a";
-        g.font = "bold 12px system-ui";
-        g.fillText(f.pending ? "후보 · 얼굴 확인 중" : f.body ? (f.held ? "사람 LOCK 유지" : "사람 LOCK · 얼굴 추적 중") : f.held ? "LOCK 유지 · 재검출 중" : "LOCK", f.x * W, f.y * H - 4);
+      this.status.textContent=debug.status+'\n'+(debug.detail??'');
+      if(flags.recognitionRange){
+        const m=this.cfg.recognition.margins,l=m.left*W,r=(1-m.right)*W,t=m.top*H,b=(1-m.bottom)*H;
+        g.fillStyle='#fff';g.strokeStyle='#182331';g.lineWidth=1;
+        for(const [x,y] of [[l,t],[(l+r)/2,t],[r,t],[l,(t+b)/2],[r,(t+b)/2],[l,b],[(l+r)/2,b],[r,b]]){
+          g.fillRect(x-4,y-4,8,8);g.strokeRect(x-4,y-4,8,8);
+        }
       }
     }
-
-    g.lineWidth = 2;
-    g.setLineDash([6, 4]);
-    g.strokeStyle = "#ffd23f";
-    g.strokeRect(z.x * W, z.y * H, z.w * W, z.h * H);
-    g.setLineDash([]);
-    g.fillStyle = "#ffd23f";
-    for (const [hx, hy] of [[z.x, z.y], [z.x + z.w, z.y], [z.x, z.y + z.h], [z.x + z.w, z.y + z.h]]) {
-      g.fillRect(hx * W - 4, hy * H - 4, 8, 8);
-    }
-    g.font = "12px system-ui";
-    g.fillText("락온 영역 — 끌어서 이동 · 모서리로 크기", z.x * W + 4, z.y * H + 14);
   }
-}
-
-function round3(v: number): number {
-  return Math.round(v * 1000) / 1000;
 }

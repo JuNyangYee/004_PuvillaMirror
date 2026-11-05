@@ -990,7 +990,8 @@ export class PuuvillaCharacter implements CharacterRig {
     this.root.scale.setScalar(1);
 
     // ── 머리 (절대 회전) ──
-    const yaw = mimic ? c.headYaw : 0;
+    const yaw = mimic ? c.headYaw : this.state==='PREPARE'
+      ? Math.sin(this.stateElapsedMs/1000*.65)*this.cfg.recognition.prepareLookDeg*Math.PI/180 : 0;
     const pitch = mimic ? c.headPitch : Math.sin(timeSec * 0.7) * 0.04;
     const roll = mimic ? c.headRoll : Math.sin(timeSec * 0.5) * 0.03;
     _e.set(pitch, yaw, roll, "YXZ");

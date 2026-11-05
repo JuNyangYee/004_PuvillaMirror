@@ -22,6 +22,7 @@ export interface OverlayStats {
 const STATE_KO: Record<string, string> = {
   IDLE: "대기(아무도 없음)",
   ATTRACT: "유도(빼꼼·손짓)",
+  PREPARE: "1 · 인식 준비(두리번거리기)",
   ENTER: "등장",
   MIMIC: "따라하기",
   EXIT: "퇴장",
@@ -37,52 +38,45 @@ export class Overlay {
   private statsEl: HTMLElement;
   private visible = true;
 
-  constructor(private cfg: Config, hooks: { onSmoothingChange: () => void; onCharacterChange: () => void; onSceneChange: () => void; onFaceNeutral?: () => void; onRecognitionRestart?:()=>void }) {
+  constructor(private cfg: Config, hooks: { onSmoothingChange: () => void; onCharacterChange: () => void; onSceneChange: () => void; onFaceNeutral?: () => void; onCenterFeet?:()=>void; onRecognitionRestart?:()=>void }) {
     this.statsEl = document.getElementById("stats")!;
     this.gui = new GUI({ title: "푸빌라 설정 · D로 닫기", width: 360 });
     const onC = hooks.onCharacterChange;
 
     const vision=this.gui.addFolder('인식 설정 — YOLO · MediaPipe');
     vision.add(cfg.person,'enabled').name('YOLO로 대상 1명 선택');
-    vision.add(cfg.person,'criterion',{'큰 사람 우선':'area','화면 아래쪽 사람 우선':'bottom'}).name('대상 선택 기준');
     vision.add(cfg.person,'confidence',.15,.9,.05).name('사람 검출 신뢰도');
     vision.add(cfg.person,'intervalMs',50,500,10).name('YOLO 검출 간격 (ms)');
     vision.add(cfg.person,'padding',.05,.5,.05).name('입력 박스 여백 (비율)');
-    vision.add(cfg.person,'switchRatio',1.05,2,.05).name('대상 교체 크기 배율');
-    vision.add(cfg.person,'switchHoldMs',100,1500,50).name('새 대상 유지 후 교체 (ms)');
+    vision.add(cfg.person,'switchRatio',1,2,.05).name('전환할 사람의 최소 크기 배율');
+    vision.add(cfg.person,'switchHoldMs',0,5000,50).name('더 큰 사람으로 전환 대기 (ms)');
     vision.add(cfg.person,'lostHoldMs',200,1000,50).name('사람 박스 소실 유예 (ms)');
     vision.add(cfg.recognition,'confirmMs',150,1500,50).name('얼굴 연속 확인 후 시작 (ms)');
+    const range=vision.addFolder('참여 범위 · 단계');
+    for(const [key,label] of [['left','왼쪽'],['right','오른쪽'],['top','위'],['bottom','아래']] as const)
+      range.add(cfg.recognition.margins,key,0,.45,.01).name(label+' 제외 마진 (비율)').listen();
+    range.add(cfg.recognition,'prepareArea',.005,.5,.005).name('1 준비: 사람 면적 ≥');
+    range.add(cfg.recognition,'activeArea',.01,.8,.005).name('2 인식: 사람 면적 ≥');
+    range.add(cfg.recognition,'faceHeight',.02,.5,.005).name('2 인식: 얼굴 높이 ≥');
+    range.add(cfg.recognition,'prepareLookDeg',0,35,1).name('준비 고개 회전 (°)');
+    const rangeHint=document.createElement('div');rangeHint.style.cssText='padding:6px 8px;font-size:11px;line-height:1.5;opacity:.75';
+    rangeHint.textContent='0: 범위 밖·작은 사람 / 1: 준비·두리번거리기 / 2: 크기·얼굴 연속 확인 후 따라하기. 사람 면적은 영상 대비 비율(0.08=8%), 얼굴 높이는 영상의 짧은 변 대비 비율입니다. 사람 박스 중심으로 마진을 확인하며 팔은 범위 밖으로 뻗어도 됩니다.';
+    range.$children.appendChild(rangeHint);range.close();
     vision.add({retry:()=>hooks.onRecognitionRestart?.()},'retry').name('YOLO 다시 초기화');
     const note=document.createElement('div');note.style.cssText='padding:6px 8px;font-size:11px;color:#abb8c8;line-height:1.5';
-    note.textContent='Face 1명 · Pose 1명 (내부 스무딩). 검출 박스에 여백을 더한 영상으로 인식합니다. 큰 사람 우선은 상체 화면용이며 실제 거리 측정은 아닙니다. 다른 사람이 박스 안에 겹치면 혼동할 수 있습니다.';
+    note.textContent='허용 마진 안의 사람 중 가장 크게 보이는 사람을 선택합니다. 다른 사람이 설정 배율보다 크게 보이는 상태가 전환 대기 시간 동안 이어지면 교체합니다. 새 대상은 얼굴 확인을 거친 뒤 반영합니다. 실제 거리 측정이나 신원 식별은 아니므로 겹친 사람은 혼동할 수 있습니다. YOLO를 끄면 전체 영상에서 MediaPipe 1명 추적만 사용합니다.';
     vision.$children.appendChild(note);vision.close();
     const debug=this.gui.addFolder('카메라 인식 디버그');
+    debug.add(cfg.debugVision,'recognitionRange').name('참여 허용 범위 · 단계');
     debug.add(cfg.debugVision,'yoloBoxes').name('YOLO 사람 박스');
     debug.add(cfg.debugVision,'inputRegion').name('MediaPipe 입력 범위');
     debug.add(cfg.debugVision,'bodyPoints').name('몸 관절 · 연결선');
     debug.add(cfg.debugVision,'faceLandmarks').name('얼굴 랜드마크');
     debug.close();
-    const f1 = this.gui.addFolder("접근 판정 — 언제 등장/퇴장할지");
-    f1.add(cfg.presence, "mimicOnLock").name("인식 확인 후 따라하기 (거리 제한 해제)");
-    f1.add(cfg.presence, "enterBboxHeight", 0.05, 0.6, 0.005)
-      .name("등장: 얼굴 크기 ≥ (입력 짧은 변 비율)");
-    f1.add(cfg.presence, "exitBboxHeight", 0.03, 0.5, 0.005)
-      .name("멀어짐: 얼굴 크기 ≤ (입력 짧은 변 비율)");
-    f1.add(cfg.presence, "centerToleranceX", 0.05, 0.5, 0.01)
-      .name("중앙 인정 범위 (화면 폭 비율, ±)");
-    f1.add(cfg.presence, "faceLostHoldMs", 0, 3000, 50)
-      .name("얼굴 놓쳐도 유지 (ms)");
-    f1.add(cfg.presence, "exitHoldMs", 0, 6000, 100)
-      .name("멀어진 뒤 퇴장까지 (ms)");
-    f1.add(cfg.presence, "attractAfterMs", 1000, 60000, 500)
-      .name("아무도 없을 때 유도 시작 (ms)");
-    f1.add(cfg.presence, "lockCenterWeight", 0, 1, 0.05)
-      .name("거리 제한 모드: 가운데 우선 정도");
-    const hint = document.createElement("div");
-    hint.style.cssText = "padding:4px 8px 8px;font-size:11px;line-height:1.4;color:#9aa0ad";
-    hint.textContent = "노란 영역에 걸친 사람을 YOLO가 선택하고 얼굴을 연속 확인한 뒤 따라합니다. 거리 제한 모드에서는 얼굴 크기와 중앙 범위도 확인합니다. 노란 박스를 끌어 인식 허용 영역을 편집할 수 있습니다.";
-    f1.$children.appendChild(hint);
-
+    const f1 = this.gui.addFolder("인식 소실 · 대기 동작");
+    f1.add(cfg.presence, "faceLostHoldMs", 200, 3000, 50).name("얼굴 소실 유예 (ms)");
+    f1.add(cfg.presence, "exitHoldMs", 0, 6000, 100).name("인식 종료 후 퇴장 대기 (ms)");
+    f1.add(cfg.presence, "attractAfterMs", 1000, 60000, 500).name("대기 손짓 시작 (ms)");
     f1.close();
     const f2 = this.gui.addFolder("고개·표정 매핑 — 얼마나 크게 따라할지");
     f2.add(cfg.mapping, "autoNeutral").name("카메라 각도·뜬 눈 자동 기준").onChange(() => hooks.onFaceNeutral?.());
@@ -125,6 +119,7 @@ export class Overlay {
     f8.add(cfg.body, "armRaiseMaxRad", 1, 3, 0.05).name("팔 드는 최대 각 (rad, 아래=0)");
     f8.add(cfg.body, "minVisibility", 0, 1, 0.05).name("관절 신뢰도 최소 (0~1)");
     f8.add(cfg.body, "lostHoldMs", 0, 3000, 50).name("몸 놓쳐도 유지 (ms)");
+    f8.add(cfg.body, 'additionalSmoothing').name('MediaPipe 이후 추가 스무딩');
     f8.add(cfg.body, "minCutoff", 0.1, 5, 0.05).name("팔 부드러움 (작을수록 부드럽고 느림)").onChange(hooks.onSmoothingChange);
     f8.add(cfg.body, "beta", 0, 2, 0.01).name("팔 빠른 동작 반응 (클수록 빠름)").onChange(hooks.onSmoothingChange);
     f8.add(cfg.body, "responsiveArms").name("큰 팔 동작 빠르게 따라가기");
@@ -195,10 +190,11 @@ export class Overlay {
     edge.add(cfg.filter,"edgeHi",.2,1,.01).name("털 끝 투명도 상한");edge.close();
 
     const fv = this.gui.addFolder("화면 시점 — 직접 잡기");
-    fv.add(cfg.scene, "pViewCenterCm", 20, 220, 0.5).name("시점 높이 (cm)").onChange(onS).listen();
+    fv.add(cfg.scene, "pViewCenterCm", -100, 220, 0.5).name("시점 높이 (cm)").onChange(onS).listen();
     fv.add(cfg.scene, "pViewHeightCm", 25, 260, 0.5).name("줌 (보이는 높이 cm)").onChange(onS).listen();
     fv.add(cfg.scene, "pViewOffsetXcm", -80, 80, 0.5).name("좌우 이동 (cm)").onChange(onS).listen();
     fv.add(cfg.scene, "cameraYawDeg", -ORBIT_LIMITS.yaw, ORBIT_LIMITS.yaw, 0.5).name("좌우 회전 (°)").onChange(onS).listen();
+    fv.add({centerFeet:()=>hooks.onCenterFeet?.()},'centerFeet').name('발 위치를 화면 중앙으로');
     fv.add({reset:()=>{resetCameraView(cfg.scene);onS();this.requestSave();}}, "reset").name("시점 초기화 (R)");
     fv.add(cfg.scene, "cameraTiltDeg", ORBIT_LIMITS.tiltMin, ORBIT_LIMITS.tiltMax, 0.5).name("카메라 위아래 각 (°, −=내려다봄)").onChange(onS).listen();
     fv.add({
@@ -221,20 +217,32 @@ export class Overlay {
     lightHint.textContent = '정면 구도 기준: 좌우 0°는 앞, −90°는 왼쪽, +90°는 오른쪽, ±180°는 뒤. 높이 90°는 머리 위입니다.';
     lightHint.style.cssText = 'padding:8px 10px;line-height:1.5;opacity:.75;font-size:11px';
     lighting.$children.appendChild(lightHint);
-    const addLight = (role:LightRole, title:string, intensity:'keyLight'|'fillLight'|'rimLight', max:number) => {
+    const addLight = (role:LightRole, title:string, intensity:'keyLight'|'fillLight'|'rimLight'|'bounceLight', max:number) => {
       const folder = lighting.addFolder(title);
       folder.add(cfg.scene, intensity, 0, max, .01).name('밝기').onChange(onS);
+      folder.addColor(cfg.scene.winterLightColors, role).name('색상 (겨울 배경)').onChange(onS);
       folder.add(cfg.scene.lightDirections[role], 'azimuth', -180, 180, 1).name('좌우 위치 (°)').onChange(onS).listen();
-      folder.add(cfg.scene.lightDirections[role], 'elevation', 0, 90, 1).name('높이 각도 (°)').onChange(onS).listen();
+      folder.add(cfg.scene.lightDirections[role], 'elevation', role==='bounce'?-80:0, 90, 1).name('높이 각도 (°)').onChange(onS).listen();
       folder.close();
     };
-    addLight('key', '주광', 'keyLight', 3);
-    addLight('fill', '보조광', 'fillLight', 2);
-    addLight('rim', '테두리광', 'rimLight', 2);
+    addLight('key', '주광', 'keyLight', 10);
+    addLight('fill', '보조광', 'fillLight', 10);
+    addLight('rim', '테두리광', 'rimLight', 5);
+    addLight('bounce', '눈밭 반사광 (겨울)', 'bounceLight', 2);
     lighting.add(cfg.scene, 'hemiLight', 0, 2, .01).name('주변광 (그림자 밝기)').onChange(onS);
+    lighting.addColor(cfg.scene.winterLightColors, 'sky').name('하늘 반사색 (겨울)').onChange(onS);
+    lighting.addColor(cfg.scene.winterLightColors, 'ground').name('눈밭 반사색 (겨울)').onChange(onS);
     lighting.add(cfg.scene, 'envLight', 0, 1.5, .01).name('환경 반사').onChange(onS);
     lighting.add({reset:()=>{resetLightDirections(cfg.scene.lightDirections);onS();this.requestSave();}},'reset').name('조명 위치 초기화');
     lighting.close();
+    const shadow = this.gui.addFolder("발밑 그림자 — 겨울 배경");
+    shadow.add(cfg.scene.groundShadow, "enabled").name("그림자 표시").onChange(onS);
+    shadow.add(cfg.scene.groundShadow, "opacity", 0, 1, .01).name("진하기").onChange(onS);
+    shadow.add(cfg.scene.groundShadow, "width", .25, 3, .05).name("가로 크기 (×)").onChange(onS);
+    shadow.add(cfg.scene.groundShadow, "depth", .25, 3, .05).name("앞뒤 크기 (×)").onChange(onS);
+    shadow.add(cfg.scene.groundShadow, "softness", .25, 2, .05).name("가장자리 부드러움").onChange(onS);
+    shadow.add(cfg.scene.groundShadow, "contact", 0, 1, .01).name("발 접점 진하기").onChange(onS);
+    shadow.close();
     // 그릴 때마다 값을 읽으므로 따로 적용 호출 없음
     const snow = this.gui.addFolder("겨울 배경 눈");
     snow.add(cfg.scene.snow, "enabled").name("눈 내리기");

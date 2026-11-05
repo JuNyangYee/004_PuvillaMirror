@@ -1,5 +1,5 @@
 {
-  "$comment": "런타임 튜닝값. 코드가 아니라 여기서 바꾼다. 개발 서버(npm run dev)에서는 오버레이(d 키)·락온 영역 편집이 이 파일에 자동 저장된다.",
+  "$comment": "런타임 튜닝값. 코드가 아니라 여기서 바꾼다. 개발 서버(npm run dev)에서는 설정(d 키) 변경이 이 파일에 자동 저장된다.",
   "build": "codex-dev",
   "camera": {
     "deviceLabelIncludes": "",
@@ -7,6 +7,7 @@
     "height": 720,
     "frameRate": 30,
     "mirror": true,
+    "inputRotation": 0,
     "applyImageSettings": false,
     "autoExposure": true,
     "exposureTime": 312.5,
@@ -28,33 +29,52 @@
     "transposeMatrix": false,
     "useWorker": true
   },
+  "person": {
+    "enabled": true,
+    "confidence": 0.4,
+    "intervalMs": 100,
+    "padding": 0.2,
+    "switchRatio": 1.1,
+    "switchHoldMs": 800,
+    "lostHoldMs": 500
+  },
+  "recognition": {
+    "confirmMs": 350,
+    "margins": {
+      "left": 0.05,
+      "right": 0.05,
+      "top": 0.02,
+      "bottom": 0.02
+    },
+    "prepareArea": 0.02,
+    "activeArea": 0.08,
+    "faceHeight": 0.06,
+    "prepareLookDeg": 18
+  },
+  "debugVision": {
+    "recognitionRange": true,
+    "yoloBoxes": true,
+    "inputRegion": false,
+    "bodyPoints": true,
+    "faceLandmarks": true
+  },
   "smoothing": {
     "headMinCutoff": 1,
-    "headBeta": 0.05,
+    "headBeta": 1,
     "blendMinCutoff": 1.5,
     "blendBeta": 0.1,
     "blinkMinCutoff": 6,
     "dCutoff": 1
   },
   "presence": {
-    "mimicOnLock": true,
-    "enterBboxHeight": 0.22,
-    "exitBboxHeight": 0.15,
-    "centerToleranceX": 0.35,
     "faceLostHoldMs": 1500,
     "exitHoldMs": 1500,
-    "attractAfterMs": 8000,
-    "lockZone": {
-      "x": 0.096,
-      "y": 0,
-      "w": 0.842,
-      "h": 0.971
-    },
-    "lockCenterWeight": 0.6
+    "attractAfterMs": 8000
   },
   "mapping": {
     "yawGain": 1.2,
     "pitchGain": 1,
+    "autoNeutral": true,
     "rollGain": 0.8,
     "yawClampDeg": 40,
     "pitchClampDeg": 25,
@@ -74,8 +94,7 @@
     "mouthBaselineSec": 8,
     "jawGain": 1.2,
     "browGain": 1,
-    "blendDeadzone": 0.06,
-    "autoNeutral": true
+    "blendDeadzone": 0.06
   },
   "expression": {
     "smileThreshold": 0.45,
@@ -88,12 +107,32 @@
     "modelPath": "./models/pu_stand.obj",
     "subdivLevels": 2,
     "modelScale": 0.04,
+    "sitModelPath": "./models/pu_sit.obj",
+    "seatNeckShare": 0.35,
+    "seatWaveRaise": 0.35,
+    "seatWaveFwd": 0.25,
+    "seatWaveForeOut": 0.25,
+    "seatWaveSwing": 0.3,
+    "freeArmIdleTheta": 0.2,
+    "freeArmIdlePhi": 0.55,
+    "freeArmIdleElbow": 0.5,
+    "freeArmWaveTwist": 1.4,
+    "freeArmWaveTheta": 2.35,
+    "freeArmWavePhi": 0.3,
+    "freeArmWaveElbow": 0.15,
+    "freeArmWaveSwing": 0.25,
+    "freeArmWaveHz": 1.43,
+    "freeArmRaiseMaxRad": 2.8,
+    "freeArmSlim": 0.82,
+    "sitMufflerPath": "./models/muffler_sit.bin",
+    "seatModelPath": "./models/seat_t2.bin",
+    "seatMufflerPath": "./models/muffler_seat.bin",
     "alwaysVisible": true,
     "focusYcm": 128,
-    "enterDrop": 7,
+    "enterDrop": 6.4,
     "attractPeek": 0.8,
     "bodyFollow": 0.18,
-    "waveLiftRad": 1.1,
+    "waveLiftRad": 0.82,
     "idleBreathAmp": 0.015,
     "idleBreathHz": 0.25,
     "autoBlinkMinSec": 2.5,
@@ -104,11 +143,11 @@
   "fur": {
     "color": "#F2F2F2",
     "shells": 14,
-    "lengthCm": 1.8,
-    "freq": 3,
-    "minDensity": 0.45,
-    "lean": 1,
-    "thickness": 0.35,
+    "lengthCm": 2.9,
+    "freq": 2.9,
+    "minDensity": 0.38,
+    "lean": 0.47,
+    "thickness": 0.41,
     "bumpCm": 0.8,
     "tuftCm": 4.5,
     "roughness": 1,
@@ -131,15 +170,15 @@
     "closedEyeDrop": 0.5,
     "closedEyeLineCm": 0.5,
     "lineCm": 0.5,
-    "mouthLineCm": 0.5,
+    "mouthLineCm": 0.34,
     "mouthHalfW": 3.6,
     "mouthRestCurve": 0.05,
     "smileCurve": 0.085,
     "frownWidth": 0.55,
     "frownArcCm": 0.7,
     "mouthOpenFrom": 0.25,
-    "mouthOHalfW": 1.25,
-    "mouthOHalfH": 1.9,
+    "mouthOHalfW": 2.05,
+    "mouthOHalfH": 1.75,
     "blushStrength": 1,
     "blushGrinFrom": 0.3,
     "blushGrinFull": 0.5,
@@ -152,6 +191,7 @@
   },
   "pose": {
     "enabled": true,
+    "useWorker": true,
     "modelPath": "./models/pose_landmarker_full.task",
     "modelUrlFallback": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
     "delegate": "GPU",
@@ -165,7 +205,9 @@
     "enabled": true,
     "minVisibility": 0.5,
     "lostHoldMs": 500,
+    "additionalSmoothing": true,
     "minCutoff": 1.2,
+    "responsiveArms": true,
     "beta": 0.3,
     "torsoYawGain": 0.8,
     "torsoPitchGain": 0.5,
@@ -178,7 +220,6 @@
     "armRig": "connected",
     "armRigPath": "./models/stand_connected_cage_mirrorleft.json",
     "armDeform": "cage",
-    "armBendSpread": 0.45,
     "armHeadClearance": false,
     "armHeadContact": false,
     "armUpperClearance": false,
@@ -190,19 +231,48 @@
     "armPawFrame": true,
     "armImagePalm": true,
     "armFollowPose": true,
-    "responsiveArms": true
+    "armBendSpread": 0.45
   },
   "scene": {
     "bgTop": "#F76A4B",
     "bgBottom": "#E2462A",
-    "exposure": 0.88,
+    "exposure": 1.25,
     "cameraTiltDeg": -6,
-    "keyLight": 1.4,
-    "fillLight": 0.55,
-    "rimLight": 1.1,
-    "hemiLight": 0.8,
-    "envLight": 0.3,
+    "cameraYawDeg": 0,
+    "keyLight": 2.3,
+    "fillLight": 1.45,
+    "rimLight": 2.1,
+    "bounceLight": 0.5,
+    "hemiLight": 1,
+    "envLight": 0.08,
+    "lightDirections": {
+      "key": {
+        "azimuth": -40,
+        "elevation": 40
+      },
+      "fill": {
+        "azimuth": 55,
+        "elevation": 15
+      },
+      "rim": {
+        "azimuth": 130,
+        "elevation": 25
+      },
+      "bounce": {
+        "azimuth": -15,
+        "elevation": -35
+      }
+    },
+    "winterLightColors": {
+      "key": "#dce5ff",
+      "fill": "#eedee9",
+      "rim": "#ffd0ab",
+      "bounce": "#d8def7",
+      "sky": "#bfcef0",
+      "ground": "#e4d6eb"
+    },
     "layout": "portrait",
+    "outputMirror": false,
     "aspect": 0.5625,
     "viewCenterCm": 133,
     "viewHeightCm": 90,
@@ -211,25 +281,46 @@
     "pViewHeightCm": 250,
     "pViewOffsetXcm": 0,
     "centerLongScreens": true,
-    "cameraYawDeg": 0,
-    "lightDirections": {
-      "key": {
-        "azimuth": -35,
-        "elevation": 30
-      },
-      "fill": {
-        "azimuth": 50,
-        "elevation": 55
-      },
-      "rim": {
-        "azimuth": 145,
-        "elevation": 35
-      }
-    },
     "snow": {
       "enabled": true,
-      "amount": 1,
-      "speed": 1
+      "amount": 0.7,
+      "speed": 0.4
+    },
+    "groundShadow": {
+      "enabled": true,
+      "opacity": 0.65,
+      "width": 1.2,
+      "depth": 1.6,
+      "softness": 1.4,
+      "contact": 0.85
+    }
+  },
+  "outfit": {
+    "style": "christmas",
+    "sitBody": false,
+    "seatBody": false,
+    "muffler": {
+      "fittedPath": "./models/muffler_fit.bin",
+      "path": "./models/muffler.bin",
+      "colorMap": "./models/muffler_color.jpg",
+      "tint": "#ffffff",
+      "red": "#B3210F",
+      "cream": "#E9DDC9",
+      "headFromY": 128,
+      "headFollow": 0.3,
+      "scale": 1,
+      "offsetX": 0,
+      "offsetY": 0,
+      "offsetZ": 0,
+      "gapCm": 0.8,
+      "smoothCm": 3,
+      "hugMaxCm": 10,
+      "hugInsetCm": 3,
+      "liftMaxCm": 4,
+      "topCapCm": 0,
+      "topCapBackCm": 140,
+      "srcRingFromY": 1.75,
+      "srcHingeY": 1.5
     }
   },
   "filter": {
@@ -245,8 +336,8 @@
     "posterLevels": 0,
     "oil": {
       "enabled": true,
-      "strength": 0.3,
-      "size": 1.4,
+      "strength": 0,
+      "size": 0.6,
       "boil": 0.05,
       "fps": 12,
       "shortSide": 1080,
@@ -269,29 +360,5 @@
     "reloadOnFatalMs": 5000,
     "healthPostUrl": "",
     "healthIntervalMs": 10000
-  },
-  "outfit": {
-    "style": "christmas",
-    "sitBody": false,
-    "seatBody": false
-  },
-  "person": {
-    "enabled": true,
-    "confidence": 0.4,
-    "intervalMs": 100,
-    "padding": 0.2,
-    "criterion": "area",
-    "switchRatio": 1.3,
-    "switchHoldMs": 450,
-    "lostHoldMs": 500
-  },
-  "recognition": {
-    "confirmMs": 350
-  },
-  "debugVision": {
-    "yoloBoxes": true,
-    "inputRegion": true,
-    "bodyPoints": false,
-    "faceLandmarks": false
   }
 }

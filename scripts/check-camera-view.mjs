@@ -3,7 +3,7 @@ import {existsSync} from 'node:fs';
 import {registerHooks} from 'node:module';
 import * as THREE from 'three';
 registerHooks({resolve(s,c,next){if(s.startsWith('.')&&c.parentURL&&!/\.[a-z]+$/i.test(s)){const p=new URL(s+'.ts',c.parentURL);if(existsSync(p))return next(p.href,c);}return next(s,c);}});
-const {INITIAL_VIEW,resetCameraView,orbitAngles,applyCameraView}=await import('../src/cameraView.ts');
+const {INITIAL_VIEW,resetCameraView,orbitAngles,applyCameraView,centerFeetInView}=await import('../src/cameraView.ts');
 const {GroundedBackdrop}=await import('../src/groundedBackdrop.ts');
 const camera=new THREE.PerspectiveCamera(18,9/16,.5,200);
 const scale=.04,focus=128,pivot=new THREE.Vector3(0,(95-focus)*scale,0);
@@ -40,3 +40,19 @@ const expected=new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,came
 assert.deepEqual(photoMatrix.elements,expected.elements,'photo and reset use same reference camera');
 bg.setTexture(null,16/9);assert.equal(bg.root.visible,false);
 console.log('PASS: body-centered orbit, camera-space pan, reset preserves other preferences, limits, photo projection and contact floor');
+
+for(const yaw of [-25,0,25])for(const tilt of [-12,-6,-2]){
+  Object.assign(cfg,{cameraYawDeg:yaw,cameraTiltDeg:tilt,pViewCenterCm:160,pViewOffsetXcm:35,pViewHeightCm:180});
+  applyCameraView(camera,cfg,scale,focus);
+  const q=camera.quaternion.clone();
+  centerFeetInView(camera,cfg,scale,focus);
+  const feet=new THREE.Vector3(0,-focus*scale,0).project(camera);
+  assert.ok(Math.abs(feet.x)<1e-10&&Math.abs(feet.y)<1e-10,'feet centered after rotation and pan');
+  assert.ok(camera.quaternion.angleTo(q)<1e-7,'centering preserves camera direction');
+  assert.equal(cfg.pViewHeightCm,180,'centering preserves zoom');
+  const position=camera.position.clone();centerFeetInView(camera,cfg,scale,focus);
+  assert.ok(position.distanceTo(camera.position)<1e-10,'centering is idempotent');
+}
+resetCameraView(cfg);applyCameraView(camera,cfg,scale,focus);
+assert.deepEqual(camera.matrixWorld.elements,initialMatrix.elements,'reset restores view after feet centering');
+console.log('PASS: feet centering preserves angle/zoom, repeated action and reset');

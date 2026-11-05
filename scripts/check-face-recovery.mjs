@@ -51,7 +51,6 @@ assert.equal(p.blend,face.blend);
 const {FaceRecovery:Before}=await import('../dev/face-recovery-before-v41.ts');
 const {SignalProcessor}=await import('../src/signals.ts');
 const cfg=JSON.parse(readFileSync('public/config.json'));
-cfg.presence.lockZone={x:0,y:0,w:1,h:1};
 const recovered=remapRecoveryFace(face,{x:280,y:0,size:720},1280,720);
 const stranger={...face,bbox:{x:.8,y:.1,w:.15,h:.3,cx:.875,cy:.25}};
 for(const [Recovery,fixed] of [[Before,false],[FaceRecovery,true]]){
@@ -70,7 +69,23 @@ for(const [Recovery,fixed] of [[Before,false],[FaceRecovery,true]]){
 }
 const dedup=new FaceRecovery();
 dedup.run(source,100,(input)=>input===source?[]:[face]);
-assert.deepEqual(dedup.run(source,1100,(input)=>input===source?[recovered,stranger]:[face]),[recovered,stranger]);
+let fullProbes=0;
+assert.deepEqual(dedup.run(source,1100,(input)=>{if(input===source){fullProbes++;return [recovered,stranger];}return [face];}),[recovered]);
+assert.equal(fullProbes,0,'healthy crop never alternates input framing for periodic probes');
 assert.equal(dedup.mode,'recovery','matching full-frame probe must not discard a proven recovery region');
 console.log('PASS: full-frame priority, recovery cadence, failure clearing, bounded search, timestamp monotonicity, portrait/landscape coordinates, reset');
 console.log('PASS: reproduced full-frame bystander takeover; recovered visitor remains locked; same-face dedup without periodic framing changes');
+
+const healthy=new FaceRecovery();let healthyCalls=0;
+const hint={cx:.5,cy:.35,size:1};
+for(let t=0;t<1500;t+=33){healthy.run(source,t,input=>{healthyCalls++;assert.equal(input,source);return [face];},hint);}
+assert.equal(healthyCalls,46,'healthy full-frame tracking never needs an enlarged second pass');
+const sticky=new FaceRecovery();const crops=[];
+for(let t=0;t<1500;t+=33){sticky.run(source,t,input=>input===source?[]:[face],{cx:.5+.01*Math.sin(t),cy:.35,size:1});crops.push(draws.at(-1)?.slice(1,5));}
+assert.ok(crops.every(c=>JSON.stringify(c)===JSON.stringify(crops[0])),'pose hint jitter cannot move a successful recovery crop');
+console.log('PASS: full-frame first, one inference on healthy frames, stationary recovery input despite hint jitter');
+
+const moving=new FaceRecovery();const head={...face,bbox:{x:.4,y:.4,w:.2,h:.2,cx:.5,cy:.5}};
+moving.run(source,0,image=>image===source?[]:[head],{cx:.25,cy:.5,size:.4});
+const shifted=moving.run(source,33,image=>image===source?[]:(draws.at(-1)[1]>600?[head]:[]),{cx:.75,cy:.5,size:.4});
+assert.equal(shifted.length,1,'head leaving the old crop reframes immediately instead of an 800 ms freeze');

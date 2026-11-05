@@ -16,18 +16,26 @@ export function remapPose(p:RawPose,r:InferenceRegion):RawPose {
   return {...p,image,imageAspect:r.aspect,nose:{x:r.x+p.nose.x*r.w,y:r.y+p.nose.y*r.h},
     shoulderW:image?Math.hypot(image[11].x-image[12].x,image[11].y-image[12].y):p.shoulderW*r.w};
 }
+/** Fixed camera coordinates; only pixels outside the selected box are masked.
+ * A changing YOLO box must not resize or translate MediaPipe's temporal input. */
 export class PersonCrop {
   readonly canvas=document.createElement('canvas');
   private time=-1;
   region:InferenceRegion|null=null;
-  reset():void {this.time=-1;this.region=null;}
+  bounds:InferenceRegion|null=null;
+  reset():void {this.time=-1;this.region=this.bounds=null;}
   update(source:HTMLCanvasElement,b:PersonBox,time:number):HTMLCanvasElement {
     if(time===this.time&&this.region)return this.canvas;
-    this.time=time;const r=regionFor(b,source.width,source.height);this.region=r;
-    const sw=Math.round(r.w*source.width),sh=Math.round(r.h*source.height),scale=Math.min(1,960/Math.max(sw,sh));
-    const w=Math.max(2,Math.round(sw*scale)),h=Math.max(2,Math.round(sh*scale));
+    this.time=time;
+    const r=regionFor(b,source.width,source.height);this.bounds=r;
+    const scale=Math.min(1,1280/Math.max(source.width,source.height));
+    const w=Math.max(2,Math.round(source.width*scale)),h=Math.max(2,Math.round(source.height*scale));
     if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;}
-    this.canvas.getContext('2d')!.drawImage(source,Math.round(r.x*source.width),Math.round(r.y*source.height),sw,sh,0,0,w,h);
+    this.region={x:0,y:0,w:1,h:1,aspect:source.width/source.height};
+    const ctx=this.canvas.getContext('2d')!;
+    ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);
+    ctx.drawImage(source,Math.round(r.x*source.width),Math.round(r.y*source.height),
+      Math.round(r.w*source.width),Math.round(r.h*source.height),r.x*w,r.y*h,r.w*w,r.h*h);
     return this.canvas;
   }
 }

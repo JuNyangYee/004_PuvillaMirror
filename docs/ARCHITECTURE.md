@@ -1,8 +1,8 @@
 # Codex 미믹 파이프라인
 
-웹캠 → FaceTracker → SignalProcessor(대상 얼굴) → MimicStateMachine → 표정 매핑 → PuuvillaCharacter → Scene.
+웹캠 → PersonTracker(YOLO 대상 선택) → PersonCrop → FaceTracker / PoseTracker → RecognitionGate(참여 단계) → SignalProcessor / BodyProcessor → MimicStateMachine → PuuvillaCharacter → Scene.
 
-같은 웹캠 → PoseTracker → BodyProcessor(대상 얼굴과 일치하는 몸, 미러링·스무딩·팔별 가림 유지) → PuuvillaCharacter.solveArm → 어깨/팔꿈치 본 → 몸·털 렌더.
+Face와 Pose는 같은 선택 인물의 ROI를 사용한다. 얼굴 위치로 대상을 다시 고정하는 별도 Lock-on과 영역 편집기는 제거했다.
 
 서 있는 원본의 팔 가중치는 빌드 도구 `scripts/build-standing-rig.mjs`에서 `public/models/stand_connected_rig.json`으로 계산한다. 런타임은 원본 몸 정점과 일치하는지 검증한 뒤 가중치를 몸과 동일한 세분화로 보간한다. 원본 OBJ는 수정하지 않는다. `body.armRig=legacy`는 이전 공간 기반 가중치 비교용이다.
 
@@ -32,14 +32,14 @@
 
 ### 사진 배경 접지와 시점 조작
 
-- `cameraView.ts`의 초기 구도는 중심 높이 95 cm, 보이는 높이 250 cm, 좌우 0, 회전 0°, 내려다보기 6°다. 좌클릭/한 손가락은 푸빌라 몸 중심 회전, 휠클릭은 카메라 평면 이동, 휠은 줌, 두 손가락은 이동+줌이다. R 또는 설정 > 화면 시점 > 시점 초기화로 다섯 시점 값만 초기화한다.
+- `cameraView.ts`의 초기 구도는 중심 높이 95 cm, 보이는 높이 250 cm, 좌우 0, 회전 0°, 내려다보기 6°다. 좌클릭/한 손가락은 푸빌라 몸 중심 회전, 휠클릭은 카메라 평면 이동, 휠은 줌, 두 손가락은 이동+줌이다. R 또는 설정 > 화면 시점 > 시점 초기화로 다섯 시점 값만 초기화한다. 같은 폴더의 `발 위치를 화면 중앙으로` 버튼은 바닥의 모델 원점을 카메라 평면 이동으로 중앙에 맞춘다. 회전·줌과 모델 위치는 유지하며, 이후 수동 이동과 초기화가 가능하다. 다른 수동 시점 조작과 마찬가지로 이 동작은 현재 화면에 적용된다.
 - `groundedBackdrop.ts`는 동일한 사진을 바닥과 뒤쪽 면에 초기 카메라 기준으로 투영한다. 푸빌라·바닥·배경·접지 그림자가 하나의 카메라로 렌더링되며 유화 필터에도 함께 들어간다. 별도 화면 고정 배경 캔버스는 이 모드에서 그리지 않는다.
 - 원본은 한 장의 사진이므로 실제 360° 환경 복원이 아니다. 사진 왜곡을 줄이기 위해 좌우 회전 ±25°, 내려다보기 2–12° 범위로 제한한다. 접지 그림자는 발밑의 부드러운 정적 그림자이며 실시간 전신 그림자 맵을 추가하지 않는다.
 - `npm run camera:view:check`는 회전 중심/거리, 카메라 기준 이동, 초기화 범위, 사진 투영과 바닥 높이를 확인한다.
 
 ### 조명 배치 조절
 
-`scene.lightDirections`에 주광·보조광·테두리광의 좌우 각도(azimuth)와 높이 각도(elevation)를 저장한다. 초기 배치는 왼쪽 앞 주광(−35°/30°), 오른쪽 위 보조광(50°/55°), 오른쪽 뒤 테두리광(145°/35°)이다. 설정 > 조명 — 밝기·위치에서 즉시 조절하며, 위치 초기화는 밝기나 카메라 시점에 영향을 주지 않는다. 광원 방향은 장면에 고정되므로 카메라 회전과 함께 돌지 않는다. 주변광과 환경 반사에는 위치 조절을 제공하지 않는다.
+`scene.lightDirections`에 주광·보조광·테두리광의 좌우 각도(azimuth)와 높이 각도(elevation)를 저장한다. 초기 배치는 왼쪽 위 주광(−40°/40°), 오른쪽 낮은 보조광(55°/15°), 오른쪽 뒤 테두리광(130°/25°)이다. 설정 > 조명 — 밝기·위치에서 즉시 조절하며, 위치 초기화는 밝기나 카메라 시점에 영향을 주지 않는다. 광원 방향은 장면에 고정되므로 카메라 회전과 함께 돌지 않는다. 주변광과 환경 반사에는 위치 조절을 제공하지 않는다.
 
 ### 겨울 배경 눈
 
@@ -54,13 +54,24 @@
 - A local YOLO11n worker runs at most once per configured interval (100 ms default),
   with one frame in flight. WebGPU preferred, worker WASM fallback. Errors/timeouts
   stop acquisition and show a retry state; they do not silently track the full crowd.
-- PersonSelection ranks camera-normalized person boxes overlapping the mirrored
-  operator zone. Default area is a proximity heuristic for upper-body framing, not
-  a distance sensor. Bottom is optional for floor-visible views. A 30% larger
-  challenger must persist 450 ms; the current target has a 500 ms loss lease.
-- PersonCrop uses 20% padding per side, immediate expansion and eased contraction.
-  It preserves aspect and caps the long side at 960 px. Face and Pose both use one
-  person. Faces may use the selected pose's head region *within* this crop.
+- PersonSelection ranks eligible camera-normalized person boxes by area. A 10%
+  larger challenger must remain continuously larger for 800 ms by default (both
+  adjustable). Missing/changed challengers restart the timer; current-person loss
+  cannot bypass an already pending switch. The current target has a 500 ms loss lease.
+  A computation submitted before lease expiry can finish for at most 1000 ms; a
+  completed missing-person result cannot borrow that grace. Late YOLO results
+  beyond 1000 ms are discarded. Receipt time starts the lease, while source time
+  orders observations and challenger dwell. An expired selection stops recognition
+  without rebuilding MediaPipe; a matching return within 2 seconds retains the
+  graph. A different person or a long absence starts a new tracking epoch.
+  This is a box-area heuristic, not physical distance or biometric identity.
+- PersonCrop keeps a fixed camera-sized canvas (long side capped at 1280 px),
+  with the original aspect/coordinates. It clears to black and copies only the
+  selected person's padded rectangle in place. Padding expands immediately and
+  contracts gradually; box updates never resize or translate the inference input.
+  Face recovery tries the full masked frame first and enlarges only after failure.
+  A healthy recovery crop stays fixed, without periodic full-frame probes on the
+  same VIDEO graph; an observed head leaving it can reframe after a failed sample.
 - Every in-flight face/pose request carries its own ROI. Results are remapped to
   full rotated camera coordinates at delivery, never using a newer ROI. Pose world
   coordinates stay unchanged. Nested face-recovery landmarks are remapped too.
@@ -71,13 +82,32 @@
 - PresenceConfirmation requires at least 3 fresh matching face observations over
   350 ms; a missing observation restarts acquisition. Held/cached results cannot
   start a session. Existing face-loss grace sustains an acquired session.
-- Developer settings expose detector threshold/cadence, choice/switch policy,
+- Developer settings expose detector threshold/cadence, switch ratio/time,
   ROI padding/loss grace and face-confirmation time. Independent preview toggles
-  draw YOLO candidates/selected box, actual input ROI, pose joints/edges and face
+  draw YOLO candidates/selected box, unmasked input rectangle, pose joints/edges and face
   landmarks. All overlays use the rotated source coordinates and preview mirror.
   Face point arrays are only transferred when that debug overlay is visible.
 - Offline YOLO/ORT assets are versioned in public/. Normal Vite/portable builds
   include them. Legacy single-HTML export explicitly disables YOLO, retaining the
   previous full-frame path; use a local server build for person ROI tracking.
-- Check: npm run person:roi:check. Covers switch/loss/mirror, arm expansion,
+- Check: npm run person:roi:check. Covers switch/loss, arm expansion,
   fresh-only acquisition, ROI/world-coordinate mapping, YOLO layout/NMS.
+
+겨울 조명 색상은 `scene.winterLightColors`에 저장한다. 푸른 하늘색 주광, 옅은 분홍·보라 눈밭 보조광, 복숭아색 노을 테두리광을 사용한다. 기본 세기는 주광 2.3 / 보조광 1.45 / 테두리광 2.1 / 주변광 1.15 / 환경 반사 0.08, 노출 0.96이다. 설정에서 광원별 색상과 하늘·눈밭 반사색을 조절할 수 있으며, 단색 배경에서는 기존 중립색을 사용한다.
+
+눈밭 반사광(`scene.bounceLight`, 기본 0.5)은 겨울 배경에서만 켜지는 추가 방향광이다. −15°/−35° 아래 방향의 옅은 푸른빛(`#d8def7`)으로 하체와 턱 아래를 보완하고 주변광은 1.0으로 낮춘다. 추가 그림자 맵이나 렌더 패스는 만들지 않는다. 발밑 그림자는 기존 투명 평면 하나에 넓은 확산 그림자와 고정 발 접점을 합성하며, `scene.groundShadow.contact`로 접점 진하기를 조절한다. 가로·앞뒤 크기와 부드러움은 확산 부분을 조절하고 발 접점 위치·크기는 유지한다.
+
+## 참여 범위와 0 / 1 / 2 단계
+
+관상 키오스크 PickPod의 YOLO 선택과 인식 준비/소실 유예 분리를 참고했다. 해당 프로젝트의 bottom+IoU 점수·실루엣 마스크를 그대로 옮기지는 않았다. 이 프로젝트는 상반신 상황에 맞춰 박스 면적, 연속 후보 유지 시간, 직사각형 ROI를 사용한다.
+
+- 상하좌우 마진은 회전·미러가 반영된 카메라 미리보기 좌표 기준이다. 사람 박스 중심과 준비 최소 면적으로 YOLO 후보를 거르고, 얼굴 중심도 인식 단계에서 범위 안인지 확인한다. 팔은 범위 밖으로 뻗을 수 있다. 드래그로 사람을 고정하는 기능은 없다. D 모드에서 인식 범위 표시를 켜면 미리보기의 가장자리·모서리를 드래그해 마진을 조절하고, 안쪽을 드래그해 범위를 이동한다. 표시 좌표 기준으로 각 마진은 0~45%이며, 드래그 종료 시 저장하고 설정 슬라이더에도 즉시 반영한다. 상태 문구는 영상 아래에 표시해 하단 손잡이를 가리지 않는다.
+- 0: 후보 없음 / 마진 밖 / 사람 면적이 준비 기준 미만.
+- 1: 참여 후보는 있지만 인식 크기·얼굴·연속 확인 조건 미충족. FSM PREPARE에서 고개를 천천히 좌우로 둘러보며 사람 표정·몸은 따라하지 않는다.
+- 2: 사람 면적과 얼굴 높이가 기준 이상이고 얼굴이 최소 3회·350ms 연속 확인됨. ENTER → MIMIC. 유지 중 크기 기준은 85%까지 여유를 두며 얼굴 소실은 기존 유예 적용. 대상 전환 시 확인·중립 보정·MediaPipe 추적 상태를 모두 초기화한다.
+- 기본값: 좌우 마진 5%, 상하 2%, 준비 사람 면적 2%, 인식 사람 면적 8%, 얼굴 높이 영상 짧은 변의 6%, 준비 고개 좌우 18°. 크기는 실측 거리값이 아니며 설치 카메라에서 조절한다.
+- 설정: 인식 설정 → 참여 범위 · 단계. 디버그는 허용 범위(회색/노랑/초록), 단계 번호, 실제 사람·얼굴 크기, YOLO 전환 후보 진행률을 표시한다.
+- 오래된 lockZone, mimicOnLock, 거리/중앙 조건 및 criterion 저장값은 로드 시 제거한다. YOLO를 명시적으로 끈 경우만 전체 영상 Face/Pose 1명 추적을 사용한다.
+- 검사: person:roi:check, recognition:check, face:freshness:check, face:continuity:check, arm:dropout:check. 기존 얼굴 영역 고정·BodyTargetLock 전용 검사는 새로운 소유권·참여 단계 검사로 대체했다.
+
+Pose 추가 필터 비교: `body.additionalSmoothing` 기본값은 true다. 설정 > 상반신 > MediaPipe 이후 추가 스무딩으로 관절·손 방향의 One Euro 필터를 켜고 끌 수 있다. 다시 켤 때 이력을 비워 오래된 자세와 섞이지 않게 한다. D 모드 관절 점은 원래부터 BodyProcessor 이전 MediaPipe 좌표(ROI를 원본 영상 좌표로 복원한 값)를 표시하므로 이 토글의 영향을 받지 않는다.

@@ -2,7 +2,7 @@ import "./embedded"; // Install embedded asset handling before other runtime mod
 import {PersonTracker} from "./personTracker";
 import {PersonCrop} from "./inferenceRegion";
 import {faceInPerson} from "./personSelection";
-import {PresenceConfirmation} from "./presenceConfirmation";
+import {RecognitionGate} from "./recognitionGate";
 import type {PoseResult} from "./poseTracker";
 import { loadConfig, saveConfig } from "./config";
 import { describeCameraError, openCamera } from "./camera";
@@ -16,8 +16,7 @@ import { PuuvillaCharacter } from "./character/puuvilla";
 import { SimInput } from "./sim";
 import { PoseTracker } from "./poseTracker";
 import { BodyProcessor, type BodyPose } from "./body";
-import { BodyTargetLock } from "./bodyTarget";
-import { LockZoneEditor } from "./lockZone";
+import { CameraPreview } from "./cameraPreview";
 import { ExpressionTest } from "./expressionTest";
 import { lightMobile, qualityParam } from "./mobile";
 import { QualityGovernor } from "./quality";
@@ -98,14 +97,14 @@ async function main(): Promise<void> {
   }
 
   const cameraInput = sim ? null : new CameraInput(video, cfg.camera);
-  const personTracker=new PersonTracker(cfg),personCrop=new PersonCrop(),confirmation=new PresenceConfirmation();
+  const personTracker=new PersonTracker(cfg),personCrop=new PersonCrop(),recognition=new RecognitionGate(cfg.recognition,cfg.presence);
+  const confirmation=recognition.confirmation;
   if(!sim&&cfg.person.enabled)personTracker.init();
   let personRevision=personTracker.selection.revision;
   let personEnabled=cfg.person.enabled;
   let rawPose:PoseResult={poses:[],fresh:false,inferenceMs:0};
   let signals = new SignalProcessor(cfg);
   let bodyProc = new BodyProcessor(cfg);
-  let bodyTarget = new BodyTargetLock(cfg);
   let fsm = new MimicStateMachine(cfg);
   const scene = new Scene(document.getElementById("app")!, cfg.scene, cfg.character, cfg.filter);
   // 배경과 조명은 키오스크에서도 같은 겨울 마을 구성을 사용.
@@ -151,13 +150,14 @@ async function main(): Promise<void> {
           if (character instanceof PuuvillaCharacter) character.refreshTuning();
         },
         onSceneChange: () => scene.applyLighting(),
+        onCenterFeet: () => scene.centerFeetInView(),
       });
 
-  const zoneEditor = kiosk ? null : new LockZoneEditor(cfg, cameraInput?.canvas ?? video, !sim);
+  const cameraPreview = kiosk ? null : new CameraPreview(cfg, cameraInput?.canvas ?? video, !sim);
   if (touch) document.body.classList.add("debug-hidden");
   if (!kiosk)
     setupViewControls(cfg, scene, () => (overlay ? overlay.requestSave() : void saveConfig(cfg)), backdrop);
-  if (zoneEditor && overlay) zoneEditor.onChange = () => overlay.requestSave();
+  if (cameraPreview && overlay) cameraPreview.onChange = () => overlay.requestSave();
 
   window.addEventListener("mimic:camera-lost", () => scheduleFatalReload(cfg.kiosk, "camera lost"));
 
@@ -166,7 +166,7 @@ async function main(): Promise<void> {
   let snap = fsm.update(sig, performance.now());
   let body: BodyPose | null = null;
   (window as unknown as { __mimic: unknown }).__mimic = {
-    cfg, personTracker, personCrop, rawPose:()=>rawPose, confirmation, logs: () => log.entries(), signal: () => sig, state: () => snap, body: () => body, sim, scene, character, tracker,
+    cfg, personTracker, personCrop, rawPose:()=>rawPose, recognition, confirmation, logs: () => log.entries(), signal: () => sig, state: () => snap, body: () => body, sim, scene, character, tracker,
   };
   startHealthBeat(cfg.kiosk, () => ({ state: snap.state, faces: sig.faceCount, logs: log.entries().slice(-5) }));
 
@@ -189,17 +189,17 @@ async function main(): Promise<void> {
     if (cameraInput?.update()) {
       tracker?.resetInput(); poseTracker?.resetInput();
       signals = new SignalProcessor(cfg); bodyProc = new BodyProcessor(cfg);
-      bodyTarget = new BodyTargetLock(cfg); fsm = new MimicStateMachine(cfg);
-      personTracker.reset();personCrop.reset();confirmation.reset();
+      fsm = new MimicStateMachine(cfg,now);
+      personTracker.reset();personCrop.reset();recognition.reset();
     }
     const fullInput = cameraInput?.canvas ?? video;
     const usePerson=!sim&&cfg.person.enabled;
     if(cameraInput)personTracker.update(cameraInput.canvas,video.currentTime,now);
     if(personRevision!==personTracker.selection.revision||personEnabled!==cfg.person.enabled){
       personRevision=personTracker.selection.revision;personEnabled=cfg.person.enabled;
-      tracker?.resetInput();poseTracker?.resetInput();personCrop.reset();confirmation.reset();
-      signals=new SignalProcessor(cfg);bodyProc=new BodyProcessor(cfg);bodyTarget=new BodyTargetLock(cfg);
-      fsm=new MimicStateMachine(cfg);body=null;rawPose={poses:[],fresh:false,inferenceMs:0};
+      tracker?.resetInput();poseTracker?.resetInput();personCrop.reset();recognition.reset();
+      signals=new SignalProcessor(cfg);bodyProc=new BodyProcessor(cfg);
+      fsm=new MimicStateMachine(cfg,now);body=null;rawPose={poses:[],fresh:false,inferenceMs:0};
     }
     const person=usePerson?personTracker.selection.selected:null;
     const roi=usePerson?personTracker.selection.roi:null;
@@ -210,31 +210,30 @@ async function main(): Promise<void> {
     if(sim)body=sim.body(now/1000);
     else if(poseTracker&&allowed){
       const pr=poseTracker.update(video,now,input,region);rawPose=pr;poseMs=pr.inferenceMs;
-      if(usePerson){
-        const selected=pr.poses.find(p=>person&&p.nose.x>=person.x&&p.nose.x<=person.x+person.w&&p.nose.y>=person.y&&p.nose.y<=person.y+person.h*.65)??null;
-        body=bodyProc.update(selected,pr.fresh,now);
-      }else{
-        const revision=bodyTarget.revision;
-        const selected=bodyTarget.update(pr.poses,signals.target,pr.fresh,now);
-        if(revision!==bodyTarget.revision){signals=new SignalProcessor(cfg);bodyProc=new BodyProcessor(cfg);tracker?.resetInput();confirmation.reset();}
-        body=bodyProc.update(selected,pr.fresh,now);
-      }
+      const selected=usePerson
+        ?pr.poses.find(p=>person&&p.nose.x>=person.x&&p.nose.x<=person.x+person.w&&p.nose.y>=person.y&&p.nose.y<=person.y+person.h*.65)??null
+        :pr.poses[0]??null;
+      rawPose={...pr,poses:selected?[selected]:[]};
+      body=bodyProc.update(selected,pr.fresh,now);
     }else body=null;
     const observedPose=rawPose.poses[0];
     const shoulders=observedPose?.image;
-    const hint=usePerson&&region&&shoulders&&now-(rawPose.observedAtMs??-Infinity)<350
-      ? {cx:(observedPose.nose.x-region.x)/region.w,cy:(observedPose.nose.y-region.y)/region.h,
-        size:Math.hypot((shoulders[11].x-shoulders[12].x)*region.aspect,shoulders[11].y-shoulders[12].y)*1.8/region.h}
-      :usePerson?null:bodyTarget.headHint(now);
+    const hintRegion=region??{x:0,y:0,w:1,h:1,aspect:cameraInput?cameraInput.canvas.width/cameraInput.canvas.height:1};
+    const hint=shoulders&&now-(rawPose.observedAtMs??-Infinity)<350
+      ? {cx:(observedPose.nose.x-hintRegion.x)/hintRegion.w,cy:(observedPose.nose.y-hintRegion.y)/hintRegion.h,
+        size:Math.hypot((shoulders[11].x-shoulders[12].x)*hintRegion.aspect,shoulders[11].y-shoulders[12].y)*1.8/hintRegion.h}
+      :null;
     let track=tracker&&allowed?tracker.update(video,now,input,hint,region,!kiosk&&cfg.debugVision.faceLandmarks&&!document.body.classList.contains("debug-hidden")):{faces:[],inferenceMs:0,observedAtMs:now};
     if(usePerson&&person)track={...track,faces:track.faces.filter(f=>faceInPerson(f,person))};
-    if(!usePerson)bodyTarget.observeFace(track,now);
     if(track.observedAtMs!==undefined&&track.observedAtMs!==lastInferMs){inferFrames++;lastInferMs=track.observedAtMs;}
-    sig=sim?sim.update(dt):signals.update(track,now,cameraInput!.canvas.width/cameraInput!.canvas.height,usePerson?null:hint);
-    const confirmed=!!sim||confirmation.update(track.faces.length>0&&sig.present,track.observedAtMs,now,cfg.recognition.confirmMs,cfg.presence.faceLostHoldMs);
-    const confirmedBody=sim?body!==null:confirmed&&(usePerson?!!person&&body!==null:cfg.presence.mimicOnLock?bodyTarget.confirmed(now):body!==null);
+    sig=sim?sim.update(dt):signals.update(track,now,cameraInput!.canvas.width/cameraInput!.canvas.height,null);
+    const recognitionStatus=sim
+      ?{stage:sig.present?2:0,personArea:0,faceHeight:0,reason:'시뮬레이션'}
+      :recognition.update(person,track,now,cameraInput!.canvas.width/cameraInput!.canvas.height,cfg.camera.mirror,usePerson);
+    const confirmed=recognitionStatus.stage===2;
+    const confirmedBody=sim?body!==null:confirmed&&body!==null&&(!usePerson||!!person);
     if(!sim&&!confirmed)body=null;
-    snap=fsm.update(confirmed?sig:emptySignal(),now,confirmedBody);
+    snap=fsm.update(confirmed?sig:emptySignal(),now,confirmedBody,recognitionStatus.stage===1);
 
     const params = confirmed && (snap.state === "MIMIC" || snap.state === "ENTER") ? mapSignal(sig, cfg.mapping) : NEUTRAL_PARAMS;
     character.setState(snap);
@@ -253,11 +252,14 @@ async function main(): Promise<void> {
     }
     exprTest?.update(now);
     if (tracer) tracer(now, sig, snap.state, params, character, signals.debugFaces, exprTest?.label ?? null);
-    zoneEditor?.draw([...signals.debugFaces, ...(!usePerson&&!signals.debugFaces.some(f=>f.locked) ? bodyTarget.debugTarget(now) : [])], {
-      boxes:personTracker.selection.candidates,selected:person,region,
+    cameraPreview?.draw({
+      boxes:personTracker.selection.candidates,selected:person,region:usePerson?personCrop.bounds:null,
+      challenger:personTracker.selection.challenger,switchProgress:personTracker.selection.switchProgress(now),
       poses:now-(rawPose.observedAtMs??-Infinity)<350?rawPose.poses:[],
       faces:now-(track.observedAtMs??-Infinity)<350?track.faces:[],
-      status:sim?'시뮬레이션':cfg.person.enabled?personTracker.status+' · '+Math.round(personTracker.inferenceMs)+'ms'+(person?(confirmed?' · 인식 확인됨':' · 얼굴 확인 중'):' · 사람 대기'):'YOLO 꺼짐 · 전체 영상',
+      stage:recognitionStatus.stage,
+      status:recognitionStatus.stage+' · '+recognitionStatus.reason,
+      detail:(sim?'시뮬레이션':usePerson?personTracker.status:'YOLO 꺼짐')+' · 사람 '+(recognitionStatus.personArea*100).toFixed(1)+'% · 얼굴 '+(recognitionStatus.faceHeight*100).toFixed(1)+'%',
     });
     overlay?.update({
       renderFps, inferFps, inferenceMs: track.inferenceMs, poseMs, body, mouthOpenFrom: cfg.mapping.mouthOpenGeoFrom,
@@ -310,7 +312,7 @@ function makeTracer() {
     const blush = u.face?.uBlushA?.value as { w: number } | undefined;
     const ec = u.fur?.uEyeClose?.value;
     buf.push(JSON.stringify({
-      t: Math.round(now), lb: label, n: sig.faceCount, st: state, fb: faces.map((f) => [r(f.x), r(f.y), r(f.w), r(f.h), f.locked ? 1 : 0, f.inZone ? 1 : 0]), yaw: r(sig.yaw), pitch: r(sig.pitch), b,
+      t: Math.round(now), lb: label, n: sig.faceCount, st: state, fb: faces.map((f) => [r(f.x), r(f.y), r(f.w), r(f.h), f.selected ? 1 : 0, f.held ? 1 : 0]), yaw: r(sig.yaw), pitch: r(sig.pitch), b,
       p: { bl: r(p.blinkL), br: r(p.blinkR), jaw: r(p.jawOpen), sm: r(p.smile), pk: r(p.pucker), ck: r(p.cheek) },
       out: { blush: blush ? r(blush.w) : null, eyeClose: ec ? [r(ec.x), r(ec.y)] : null },
     }));

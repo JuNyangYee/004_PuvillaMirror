@@ -133,7 +133,7 @@ export class ProxyCharacter implements CharacterRig {
     const c = this.cur;
 
     // 상태별 가시성·연출
-    const visibleStates: State[] = ["ATTRACT", "ENTER", "MIMIC", "EXIT"];
+    const visibleStates: State[] = ["ATTRACT", "PREPARE", "ENTER", "MIMIC", "EXIT"];
     this.root.visible = visibleStates.includes(this.state);
 
     let baseY = 0;
@@ -159,7 +159,7 @@ export class ProxyCharacter implements CharacterRig {
 
     // 머리 회전 (미믹 중에만 입력, 그 외엔 서서히 0)
     const mimic = this.state === "MIMIC" || this.state === "ENTER";
-    const ty = mimic ? c.headYaw : 0;
+    const ty = mimic ? c.headYaw : this.state==='PREPARE'?Math.sin(this.stateElapsedMs/1000*.65)*.3:0;
     const tx = mimic ? c.headPitch : Math.sin(timeSec * 0.7) * 0.04;
     const tz = mimic ? c.headRoll : 0;
     this.head.rotation.y += (ty - this.head.rotation.y) * k;
