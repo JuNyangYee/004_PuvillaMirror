@@ -233,7 +233,8 @@
     "armFollowPose": true,
     "armBendSpread": 0.45,
     "armTrackingMode": "legacy",
-    "armHybridFollow": 0
+    "armHybridFollow": 0,
+    "armSevereOverlap": true
   },
   "scene": {
     "bgTop": "#F76A4B",

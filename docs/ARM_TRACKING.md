@@ -1,6 +1,6 @@
 # Arm tracking modes
 
-Production is now fixed to **legacy**. Default config and post-load/save guards select the original pipeline. Mode selection, hybrid amount and the experimental contact toggle are removed from the UI. The source model's shoulder/upper-arm overlap is intentional; the new full-arm projection is inactive, including in idle. Original legacy contact behavior remains.
+Production is now fixed to **legacy**. Default config and post-load/save guards select the original pipeline. Mode selection, hybrid amount and the experimental contact toggle are removed from the UI. The source model's shoulder/upper-arm overlap is intentional; the new full-arm projection is inactive, including in idle. Original legacy contact behavior remains. A separate last-resort guard now handles only deeply buried limbs after interpolation (see below).
 
 The implementations below are retained for development/rollback, not exposed to kiosk users. The complete hybrid version is backed up on local branch backup/arm-hybrid at 2436ae3.
 
@@ -41,3 +41,11 @@ This is approximate body self-collision, not mesh-perfect collision: head, muffl
 `scripts/check-render-preparation.mjs` checks actual cage positions/normals under immediate vs deferred rendering.
 
 `npm run arm:hybrid:check`: verifies direction blend endpoints, improved tracking of lowered arms, partial depth reconstruction, and 480 production-character frames with mandatory post-interpolation contact even when saved legacy flags disable it.
+
+## Deep overlap guard in production
+
+Legacy mapping remains fixed. The optional body.armSevereOverlap guard (default true) runs after all existing interpolation/contact handling. It allows the original resting overlap and compares arm samples to an INNER boundary at 0.75 of the inflated torso proxy, instead of the archived full-clearance boundary of 1.015. This dimensionless value is not a percentage of mesh overlap. Mild overlap returns without changing either quaternion. Deep cases are projected only as far as the inner boundary, then excess angular correction is trimmed. Shoulder attachment overlap is still allowed; head/muffler/arm-to-arm collisions are outside its scope.
+
+D > 상반신 > 팔 동작 설정 > 팔이 깊이 파묻힐 때만 보정 toggles the extra guard. All old arm settings remain intact.
+
+npm run arm:overlap:check checks 560 poses (including 119 mild overlaps unchanged), source rest, exact idle/missing-pose equality against the guard-off baseline, and continuous production-character deep-burial cases.

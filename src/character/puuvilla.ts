@@ -21,6 +21,7 @@ import {directArmPose} from './directArmPose';
 import {hybridArmPose} from './hybridArmPose';
 import {hybridFollowAmount} from '../armTrackingMode';
 import {resolveDirectArmContact} from './directArmContact';
+import {preventSevereArmOverlap} from './severeArmOverlap';
 import { StandingTorsoContact } from "./standingTorsoClearance";
 import {separateStandingPaws} from './standingPawContact';
 import {StandingElbowPlane} from './standingElbowPlane';
@@ -1162,6 +1163,11 @@ export class PuuvillaCharacter implements CharacterRig {
         const limited=limitStandingContactMotion(arm.restFore,previousUpper,previousFore,arm.qUpper,arm.qFore,dtSec);
         this.upperContactActive[contactIndex]=upperContacts[contactIndex]||limited;
       }else this.upperContactActive[contactIndex]=false;
+      if(this.connectedArms && !measuredArms && this.cfg.body.armSevereOverlap!==false){
+        const j=this.armJoints.find(j=>j.side===arm.side)!;
+        preventSevereArmOverlap(j.s,j.h.distanceTo(j.s),arm.restUpper,arm.restFore,
+          arm.qUpper,arm.qFore,chest.quaternion,this.cfg.body.armBendSpread??.32);
+      }
       arm.upper.quaternion.copy(arm.qUpper);
       arm.fore.quaternion.copy(arm.qFore);
       if (this.armSurface) {

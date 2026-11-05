@@ -7,8 +7,8 @@ import {directArmPose} from './directArmPose';
 // The blended shoulder socket is deliberately excluded from self-collision.
 const center=new Vector3(0,69,.5),pivot=new Vector3(0,88,0);
 const samples=[.3,.4,.5,.6,.7,.8,.9,1,1.1];
-const target=1.015;
-export function directArmClearance(shoulder:Vector3,length:number,upper:Vector3,fore:Vector3,chest:Quaternion,spread:number){
+const fullClearance=1.015;
+export function directArmClearance(shoulder:Vector3,length:number,upper:Vector3,fore:Vector3,chest:Quaternion,spread:number,target=fullClearance){
  const frame=new RoundedElbowFrame(length,upper,fore,spread),p=new Vector3();
  let minimum=Infinity,penalty=0;
  for(const t of samples){
@@ -23,9 +23,9 @@ export function directArmClearance(shoulder:Vector3,length:number,upper:Vector3,
 /** Project only colliding poses. Free directions are bit-for-bit untouched.
  * Both upper arm and forearm can move; there is no lift-preservation constraint.
  * Run after temporal interpolation, so the displayed pose is what gets tested. */
-export function resolveDirectArmContact(shoulder:Vector3,length:number,restUpper:Vector3,restFore:Vector3,upperQ:Quaternion,foreQ:Quaternion,chest:Quaternion,spread:number){
+export function resolveDirectArmContact(shoulder:Vector3,length:number,restUpper:Vector3,restFore:Vector3,upperQ:Quaternion,foreQ:Quaternion,chest:Quaternion,spread:number,target=fullClearance){
  const desiredU=restUpper.clone().applyQuaternion(upperQ),desiredF=restFore.clone().applyQuaternion(foreQ).applyQuaternion(upperQ);
- const measure=(u:Vector3,f:Vector3)=>directArmClearance(shoulder,length,u,f,chest,spread);
+ const measure=(u:Vector3,f:Vector3)=>directArmClearance(shoulder,length,u,f,chest,spread,target);
  let u=desiredU.clone(),f=desiredF.clone(),score=measure(u,f);
  if(score.minimum>=target)return 0;
  const initial=score.minimum,eps=.002,axis=new Vector3(),basis:Vector3[]=[];

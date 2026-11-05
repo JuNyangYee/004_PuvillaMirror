@@ -117,6 +117,7 @@ export class Overlay {
     f8.add(cfg.body, "torsoPitchClampDeg", 0, 45, 1).name("앞뒤 숙이기 최대 (°)");
     const legacyArms=f8.addFolder('팔 동작 설정');
     legacyArms.close();
+    legacyArms.add(cfg.body,'armSevereOverlap').name('팔이 깊이 파묻힐 때만 보정');
     legacyArms.add(cfg.body, "elbowGain", 0, 2, 0.05).name("팔꿈치 굽힘 배율 (×)");
     legacyArms.add(cfg.body, "armRaiseMaxRad", 1, 3, 0.05).name("팔 드는 최대 각 (rad, 아래=0)");
     f8.add(cfg.body, "minVisibility", 0, 1, 0.05).name("관절 신뢰도 최소 (0~1)");

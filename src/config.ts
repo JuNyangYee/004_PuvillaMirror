@@ -290,6 +290,8 @@ export interface Config {
     armTrackingMode?: 'hybrid' | 'direct' | 'legacy';
     /** Hybrid direction blend: 0 old stabilization, 1 observed directions. */
     armHybridFollow?: number;
+    /** Allow natural overlap; correct only deeply buried limbs in legacy mode. */
+    armSevereOverlap?: boolean;
     armDeform?: 'surface' | 'cage';
     armCageRounded?: boolean;
     armHeadClearance?: boolean;
@@ -618,6 +620,7 @@ export const DEFAULT_CONFIG: Config = {
     armImagePalm: true,
     armFollowPose: true,
     armTrackingMode: 'legacy',
+    armSevereOverlap: true,
     armHybridFollow: .35,
   },
   scene: {
