@@ -5,7 +5,7 @@ import {portraitViewport} from './presentation';
 export type BgStyle='orange'|'winter';
 export const BG_STYLES:BgStyle[]=['orange','winter'];
 const KEY='pubilla-mimic-bg';
-/** User-supplied winter scene, cropped to fill the same portrait stage as the renderer. */
+/** Generated sunset village square, projected into the portrait scene. */
 export class Backdrop{
   readonly canvas=document.createElement('canvas');
   private tex:THREE.CanvasTexture|null=null;
@@ -42,7 +42,7 @@ export class Backdrop{
       const image=new Image();image.decoding='async';
       image.onload=()=>{this.image=image;this.worldTex=new THREE.Texture(image);this.worldTex.colorSpace=THREE.SRGBColorSpace;this.worldTex.needsUpdate=true;resolve();};
       image.onerror=()=>{console.warn('[backdrop] Winter image could not be loaded');this.loading=null;resolve();};
-      image.src=assetUrl('./bg/winter-village-reference.png');
+      image.src=assetUrl('./bg/winter-village-square-sunset.png');
     });
     return this.loading;
   }

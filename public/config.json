@@ -239,40 +239,40 @@
   "scene": {
     "bgTop": "#F76A4B",
     "bgBottom": "#E2462A",
-    "exposure": 1.25,
+    "exposure": 1.02,
     "cameraTiltDeg": -6,
     "cameraYawDeg": 0,
-    "keyLight": 2.3,
-    "fillLight": 1.45,
-    "rimLight": 2.1,
-    "bounceLight": 0.5,
-    "hemiLight": 1,
-    "envLight": 0.08,
+    "keyLight": 1.9,
+    "fillLight": 1.4,
+    "rimLight": 3.6,
+    "bounceLight": 0.32,
+    "hemiLight": 0.9,
+    "envLight": 0.07,
     "lightDirections": {
       "key": {
-        "azimuth": -40,
-        "elevation": 40
+        "azimuth": -38,
+        "elevation": 32
       },
       "fill": {
         "azimuth": 55,
-        "elevation": 15
+        "elevation": 22
       },
       "rim": {
-        "azimuth": 130,
-        "elevation": 25
+        "azimuth": -125,
+        "elevation": 24
       },
       "bounce": {
-        "azimuth": -15,
-        "elevation": -35
+        "azimuth": 15,
+        "elevation": -32
       }
     },
     "winterLightColors": {
-      "key": "#dce5ff",
-      "fill": "#eedee9",
-      "rim": "#ffd0ab",
-      "bounce": "#d8def7",
-      "sky": "#bfcef0",
-      "ground": "#e4d6eb"
+      "key": "#fff6ee",
+      "fill": "#c5cae6",
+      "rim": "#ffbd7d",
+      "bounce": "#dfcddd",
+      "sky": "#b8c2e6",
+      "ground": "#d9c4da"
     },
     "layout": "portrait",
     "outputMirror": false,

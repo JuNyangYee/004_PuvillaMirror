@@ -2,17 +2,17 @@ export type LightRole = 'key' | 'fill' | 'rim' | 'bounce';
 export interface LightDirection { azimuth: number; elevation: number }
 export type LightDirections = Record<LightRole, LightDirection>;
 export type WinterLightColors = Record<LightRole | 'sky' | 'ground', string>;
-/** Cool sky and lavender snow bounce, with sunset warmth confined to the back-right edge. */
+/** Sunset village: warm window key, lavender sky fill and a golden back-left rim. */
 export const DEFAULT_WINTER_LIGHT_COLORS: WinterLightColors = {
-  key: '#dce5ff', fill: '#eedee9', rim: '#ffd0ab', bounce: '#d8def7', sky: '#bfcef0', ground: '#e4d6eb',
+  key: '#fff6ee', fill: '#c5cae6', rim: '#ffbd7d', bounce: '#dfcddd', sky: '#b8c2e6', ground: '#d9c4da',
 };
 
 /** Front is 0°, right is +90°, back is ±180°. Positions stay fixed in the scene when orbiting. */
 export const DEFAULT_LIGHT_DIRECTIONS: LightDirections = {
-  key: { azimuth: -40, elevation: 40 },
-  fill: { azimuth: 55, elevation: 15 },
-  rim: { azimuth: 130, elevation: 25 },
-  bounce: { azimuth: -15, elevation: -35 },
+  key: { azimuth: -38, elevation: 32 },
+  fill: { azimuth: 55, elevation: 22 },
+  rim: { azimuth: -125, elevation: 24 },
+  bounce: { azimuth: 15, elevation: -32 },
 };
 
 export function lightPosition(direction: LightDirection): [number, number, number] {
