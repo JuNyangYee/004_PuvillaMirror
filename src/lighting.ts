@@ -2,9 +2,9 @@ export type LightRole = 'key' | 'fill' | 'rim' | 'bounce';
 export interface LightDirection { azimuth: number; elevation: number }
 export type LightDirections = Record<LightRole, LightDirection>;
 export type WinterLightColors = Record<LightRole | 'sky' | 'ground', string>;
-/** Sunset village: warm window key, lavender sky fill and a golden back-left rim. */
+/** Balanced winter dusk: muted blue-violet fill and soft amber village light. */
 export const DEFAULT_WINTER_LIGHT_COLORS: WinterLightColors = {
-  key: '#fff6ee', fill: '#c5cae6', rim: '#ffbd7d', bounce: '#dfcddd', sky: '#b8c2e6', ground: '#d9c4da',
+  key: '#fff5e8', fill: '#ccd3e6', rim: '#ffd09a', bounce: '#d8dcea', sky: '#b9c5df', ground: '#d8dbe5',
 };
 
 /** Front is 0°, right is +90°, back is ±180°. Positions stay fixed in the scene when orbiting. */

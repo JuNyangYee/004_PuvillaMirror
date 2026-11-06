@@ -625,8 +625,8 @@ export const DEFAULT_CONFIG: Config = {
     armHybridFollow: .35,
   },
   scene: {
-    bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 1.02, cameraTiltDeg: -6, cameraYawDeg: 0,
-    keyLight: 1.9, fillLight: 1.4, rimLight: 3.6, bounceLight: 0.32, hemiLight: 0.9, envLight: 0.07,
+    bgTop: "#F76A4B", bgBottom: "#E2462A", exposure: 1, cameraTiltDeg: -6, cameraYawDeg: 0,
+    keyLight: 1.95, fillLight: 1.3, rimLight: 2.4, bounceLight: 0.3, hemiLight: 0.9, envLight: 0.07,
     lightDirections: structuredClone(DEFAULT_LIGHT_DIRECTIONS),
     winterLightColors: structuredClone(DEFAULT_WINTER_LIGHT_COLORS),
     layout: "portrait", outputMirror: false, aspect: 9 / 16, viewCenterCm: 133, viewHeightCm: 90, viewOffsetXcm: 0,

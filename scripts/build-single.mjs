@@ -23,7 +23,7 @@ const EMBED = [
   "models/seat_t.bin",
   "models/muffler_seat.bin",
   "models/muffler_color.jpg",
-  "bg/winter-village-square-sunset.png",
+  "bg/winter-village-square-dusk.png",
   "bg/bg_far.webp",
   "bg/village_left.webp",
   "bg/village_right.webp",

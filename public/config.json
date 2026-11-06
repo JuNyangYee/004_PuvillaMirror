@@ -239,13 +239,13 @@
   "scene": {
     "bgTop": "#F76A4B",
     "bgBottom": "#E2462A",
-    "exposure": 1.02,
+    "exposure": 1,
     "cameraTiltDeg": -6,
     "cameraYawDeg": 0,
-    "keyLight": 1.9,
-    "fillLight": 1.4,
-    "rimLight": 3.6,
-    "bounceLight": 0.32,
+    "keyLight": 1.95,
+    "fillLight": 1.3,
+    "rimLight": 2.4,
+    "bounceLight": 0.3,
     "hemiLight": 0.9,
     "envLight": 0.07,
     "lightDirections": {
@@ -267,12 +267,12 @@
       }
     },
     "winterLightColors": {
-      "key": "#fff6ee",
-      "fill": "#c5cae6",
-      "rim": "#ffbd7d",
-      "bounce": "#dfcddd",
-      "sky": "#b8c2e6",
-      "ground": "#d9c4da"
+      "key": "#fff5e8",
+      "fill": "#ccd3e6",
+      "rim": "#ffd09a",
+      "bounce": "#d8dcea",
+      "sky": "#b9c5df",
+      "ground": "#d8dbe5"
     },
     "layout": "portrait",
     "outputMirror": false,
