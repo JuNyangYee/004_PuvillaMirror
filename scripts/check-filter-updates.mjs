@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {createServer} from 'node:http';
 import {buildPackage,literal,hash} from './gallery-package.mjs';
 import {filterUpdates} from './filter-updates.mjs';
-const pack=JSON.parse(await readFile('public/filter/current.json','utf8'));
+const pack=JSON.parse(await readFile('scripts/fixtures/gallery-b1325c7.json','utf8'));
 const page=await readFile('scripts/fixtures/gallery-controls.html','utf8');
 const baseline=buildPackage(pack.engine,page);
 assert.equal(baseline.schema.length,16);
@@ -20,8 +20,23 @@ assert.equal(rangeChange.schema.find(s=>s.key==='OIL.eye').max,2);
 assert.equal(rangeChange.schema.find(s=>s.key==='OIL.eye').step,.01);
 const added=buildPackage(pack.engine.replace('eye: 0 };','eye: 0, extra: .25 };'),page.replace('oil:[','oil:[["OIL.extra","새 조절",0,1,0.01,"설명"],'));
 assert.equal(added.schema.find(s=>s.key==='OIL.extra').default,.25);
+// Real historical releases must remain testable after operators update current.json.
+const newer=JSON.parse(await readFile('scripts/fixtures/gallery-7f58eaa.json','utf8'));
+const newerPage=await readFile('scripts/fixtures/gallery-controls-7f58eaa.html','utf8');
+const rebuilt=buildPackage(newer.engine,newerPage);
+assert.equal(rebuilt.schema.length,20);
+assert.deepEqual(rebuilt.schema,newer.schema);
+assert.deepEqual(rebuilt.defaults,newer.defaults);
+for(const [key,value] of Object.entries({edge:1,spill:1,slope:1,halo:0})){
+ const s=rebuilt.schema.find(s=>s.key==='OIL.'+key);
+ assert.deepEqual([s.min,s.max,s.step,s.default],[0,1,.05,value]);
+}
+for(const p of [pack,newer,JSON.parse(await readFile('public/filter/current.json','utf8')),JSON.parse(await readFile('src/vendor/gallery-bundle.json','utf8'))]){
+ const {id,...data}=p;assert.equal(hash(JSON.stringify(data)),id);
+ assert.equal(hash(p.engine),p.engineHash);
+}
 const tmp=await mkdtemp(join(tmpdir(),'mimic-filter-'));
-let incoming=rangeChange;
+let incoming=newer;
 await mkdir(join(tmp,'filter'));await writeFile(join(tmp,'filter/current.json'),JSON.stringify(pack));
 const middleware=filterUpdates(tmp,async()=>{if(incoming instanceof Error)throw incoming;return incoming;});
 const server=createServer(middleware);await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -31,12 +46,12 @@ try{
  assert.equal((await request('check',{},'https://evil.example')).status,403);
  assert.equal((await request('apply',{id:pack.id,tested:true})).status,400);
  const check=await request('check',{});assert.equal(check.data.same,false);
- assert.equal((await request('apply',{id:rangeChange.id})).status,400);
- assert.equal((await request('apply',{id:rangeChange.id,tested:true})).status,200);
- let saved=JSON.parse(await readFile(join(tmp,'filter/current.json')));assert.equal(saved.id,rangeChange.id);
+ assert.equal((await request('apply',{id:newer.id})).status,400);
+ assert.equal((await request('apply',{id:newer.id,tested:true})).status,200);
+ let saved=JSON.parse(await readFile(join(tmp,'filter/current.json')));assert.equal(saved.id,newer.id);
  assert.ok((await request('status')).data.history.includes(pack.id));
  incoming=Error('offline');assert.equal((await request('check',{})).status,400);
- saved=JSON.parse(await readFile(join(tmp,'filter/current.json')));assert.equal(saved.id,rangeChange.id);
+ saved=JSON.parse(await readFile(join(tmp,'filter/current.json')));assert.equal(saved.id,newer.id);
  assert.equal((await request('candidate',{id:'../config'})).status,400);
  assert.equal((await request('rollback',{id:pack.id,tested:true})).status,200);
  assert.equal(JSON.parse(await readFile(join(tmp,'filter/current.json'))).id,pack.id);

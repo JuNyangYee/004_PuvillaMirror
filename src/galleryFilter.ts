@@ -31,7 +31,14 @@ export async function testGallery(p:GalleryPackage):Promise<Factory>{
   for(const s of p.schema.filter(s=>s.key.startsWith('OIL.'))){
    let v:any=(fx as any)._debug;for(const key of s.key.split('.'))v=v?.[key];
    if(v!==s.default)throw Error('필터 파라미터 API 변경: '+s.key);
+   // Test a non-default value too: silently ignoring a new control must fail.
+   const alternate=s.default===s.min?s.max!:s.min!;
+   fx.set({tune:{[s.key]:alternate}});
+   let changed:any=(fx as any)._debug;for(const key of s.key.split('.'))changed=changed?.[key];
+   if(changed!==alternate)throw Error('필터 파라미터 조절 실패: '+s.key);
   }
+  fx.render(src,{time:1,force:true});
+  if(fx.gl.getError()!==fx.gl.NO_ERROR)throw Error('필터 조절 후 GPU 오류');
  }finally{fx?.dispose();}
  return create;
 }

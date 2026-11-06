@@ -45,7 +45,8 @@
     "arm:direct:check": "node --experimental-transform-types scripts/check-direct-arms.mjs",
     "arm:hybrid:check": "node --experimental-transform-types scripts/check-hybrid-arms.mjs",
     "arm:overlap:check": "node --experimental-transform-types scripts/check-severe-arm-overlap.mjs",
-    "filter:check": "node scripts/check-filter-updates.mjs"
+    "filter:check": "node scripts/check-filter-updates.mjs",
+    "filter:check:live": "node scripts/check-filter-live.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.1.0",
