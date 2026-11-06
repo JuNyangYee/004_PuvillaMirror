@@ -42,7 +42,7 @@ export class Backdrop{
       const image=new Image();image.decoding='async';
       image.onload=()=>{this.image=image;this.worldTex=new THREE.Texture(image);this.worldTex.colorSpace=THREE.SRGBColorSpace;this.worldTex.needsUpdate=true;resolve();};
       image.onerror=()=>{console.warn('[backdrop] Winter image could not be loaded');this.loading=null;resolve();};
-      image.src=assetUrl('./bg/winter-village-square-dusk.png');
+      image.src=assetUrl('./bg/winter-village-square-dusk-bright.png');
     });
     return this.loading;
   }
