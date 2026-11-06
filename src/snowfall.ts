@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type {Config} from './config';
+import {BACKGROUND_FOCUS_RANGE_CM, type BackgroundFocusOptions} from './backgroundFocus';
 import {BACKDROP_WALL_Z} from './groundedBackdrop';
 
 /** Every flake completes whole fall and sway cycles per loop, so wrapping the phase is seamless. */
@@ -31,7 +32,7 @@ export class Snowfall {
   private lastSeconds = -1;
   private readonly viewport = new THREE.Vector4();
 
-  constructor(scale: number, focusYcm: number, private cfg: Config['scene']['snow']) {
+  constructor(scale: number, focusYcm: number, private cfg: Config['scene']['snow'], private focus?: BackgroundFocusOptions) {
     const v = SNOW_VOLUME, random = mulberry32(0x5eed), count = SNOW_BASE_FLAKES * 2;
     const position = new Float32Array(count * 3), motion = new Float32Array(count * 4), look = new Float32Array(count * 2);
     for (let i = 0; i < count; i++) {
@@ -51,10 +52,13 @@ export class Snowfall {
       uniforms: {
         phase: {value: 0}, pixelScale: {value: 1}, maxPixels: {value: 12}, painted: {value: 0},
         floorY: {value: -focusYcm * scale}, fallHeight: {value: v.height}, swayZ: {value: v.swayZ},
+        focusRange: {value: new THREE.Vector2(-BACKGROUND_FOCUS_RANGE_CM.far*scale,-BACKGROUND_FOCUS_RANGE_CM.near*scale)},
+        focusRadius: {value:0},
         flakeColor: {value: new THREE.Color('#f4f8ff')},
       },
       vertexShader: `uniform float phase, pixelScale, maxPixels, painted, floorY, fallHeight, swayZ;
-        attribute vec4 motion; attribute vec2 look; varying float flakeAlpha;
+        uniform vec2 focusRange; uniform float focusRadius;
+        attribute vec4 motion; attribute vec2 look; varying float flakeAlpha; varying float defocus;
         void main(){
           vec3 p = position;
           float rise = fallHeight * (1. - fract(position.y + motion.x * phase));
@@ -67,15 +71,22 @@ export class Snowfall {
           // the oil filter repaints at brush scale: a larger dot comes out as a hollow ring, a small crisp one as a dab
           float paintScale = mix(1., .6, painted);
           float size = paintScale * look.x * projectionMatrix[1][1] * pixelScale / -view.z;
-          gl_PointSize = clamp(size, 1.5, maxPixels * paintScale);
+          // Same distance ramp as the photo floor/wall. Conserve light as the flake spreads.
+          float worldZ=(modelMatrix*vec4(p,1.)).z;
+          defocus=(1.-smoothstep(focusRange.x,focusRange.y,worldZ))*step(.001,focusRadius);
+          float baseSize=clamp(size,1.5,maxPixels*paintScale);
+          float blurSize=focusRadius*defocus;
+          gl_PointSize=sqrt(baseSize*baseSize+blurSize*blurSize);
           // sub-pixel flakes fade instead of flickering; land softly, never pop in at the top
-          flakeAlpha = look.y * min(1., size * size / 2.25) * smoothstep(0., .6, rise) * (1. - smoothstep(fallHeight - 1., fallHeight, rise));
+          flakeAlpha = (baseSize*baseSize)/(gl_PointSize*gl_PointSize) * look.y * min(1., size * size / 2.25) * smoothstep(0., .6, rise) * (1. - smoothstep(fallHeight - 1., fallHeight, rise));
         }`,
-      fragmentShader: `uniform vec3 flakeColor; uniform float painted; varying float flakeAlpha;
+      fragmentShader: `uniform vec3 flakeColor; uniform float painted; varying float flakeAlpha; varying float defocus;
         void main(){
           vec2 c = gl_PointCoord * 2. - 1.;
           float soft = max(0., 1. - dot(c, c));
           float d = mix(soft * soft, 1. - smoothstep(.45, 1., length(c)), painted);
+          float blurred=max(0.,(exp(-3.*dot(c,c))-exp(-3.))/(1.-exp(-3.)));
+          d=mix(d,blurred,defocus);
           gl_FragColor = vec4(flakeColor, flakeAlpha * d);
           #include <colorspace_fragment>
         }`,
@@ -96,6 +107,9 @@ export class Snowfall {
       u.painted.value = this.painted ? 1 : 0;
       u.pixelScale.value = this.viewport.w / 2;
       u.maxPixels.value = Math.max(2, this.viewport.w * .007);
+      // Snow is small and dim: use half the photo kernel radius as its added diameter.
+      const strength=this.focus?.enabled?this.focus.strength:0;
+      u.focusRadius.value=(Number.isFinite(strength)?THREE.MathUtils.clamp(strength,0,40):0)*.5*this.viewport.z/1080;
       geometry.setDrawRange(0, Math.round(SNOW_BASE_FLAKES * Math.min(2, Math.max(0, this.cfg.amount))));
     };
   }

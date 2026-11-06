@@ -207,7 +207,7 @@ vec2 pvStrands(vec3 p, float h, float clump, float aa, vec3 n, vec3 g, float lea
     float d = length(p - pt);
     // Subpixel fibers cover only part of a pixel; wide AA must not inflate them into a halo.
     float coverage = min(1.0, rad / max(aa, 1e-4));
-    float cv = (1.0 - smoothstep(rad - aa, rad + aa, d)) * coverage * coverage;
+    float cv = (1.0 - smoothstep(rad - aa, rad + aa, d)) * sqrt(coverage);
     if (cv > cov) {
       cov = cv;
       shade = r.z;
@@ -329,7 +329,8 @@ export function makeBodyMaterial(
         // Fine, slightly downward fibers: fade detail below pixel resolution to avoid shimmer.
         vec3 pvGrainCoord = vRest * vec3(5.5, 1.6, 5.5);
         float pvGrainFade = 1.0 - smoothstep(0.6, 1.6, length(fwidth(pvGrainCoord)));
-        float pvGrainHeight = pvNoise(pvGrainCoord) * 0.035 * uFurBump * pvGrainFade;
+        float pvGrain = (pvNoise(pvGrainCoord) - 0.5) * 0.12 * uFurBump * pvGrainFade;
+        diffuseColor.rgb *= 1.0 + pvGrain;
         #ifdef PV_SHELL
           // 가닥 털 (가이드 2.4 Ornatrix 느낌: 가늘고 촘촘, 아래로 살짝 눕고, 덩어리마다 길이가 조금씩 다름)
           float h = uShellH;
@@ -352,16 +353,7 @@ export function makeBodyMaterial(
         #endif
         // 먹선은 털 위 레이어(makeInkMaterial)가 그린다 — 여기서 그리면 털 사이로 얼룩처럼 비침
         diffuseColor.rgb = mix(diffuseColor.rgb, uBlushColor, pvInk.y);`,
-      )
-      .replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
-        // Surface-gradient bump in view space; keep strength stable as the camera zooms.
-        vec3 pvDx = dFdx(-vViewPosition), pvDy = dFdy(-vViewPosition);
-        float pvScale = length(pvDx) / max(length(dFdx(vRest)), 1e-5);
-        vec3 pvR1 = cross(pvDy, normal), pvR2 = cross(normal, pvDx);
-        float pvDet = dot(pvDx, pvR1);
-        vec3 pvGrad = sign(pvDet) * pvScale * (dFdx(pvGrainHeight)*pvR1 + dFdy(pvGrainHeight)*pvR2);
-        normal = normalize(max(abs(pvDet),1e-10)*normal - pvGrad);
-      `);
+      );
   };
   mat.customProgramCacheKey = () => (shell ? "pv-shell-short-fiber-v2" : "pv-base-short-fiber-v2");
   return mat;

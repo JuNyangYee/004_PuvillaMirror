@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {BackgroundFocus, type BackgroundFocusOptions} from './backgroundFocus';
+import {BackgroundFocus, BACKGROUND_FOCUS_RANGE_CM, type BackgroundFocusOptions} from './backgroundFocus';
 import {INITIAL_VIEW,applyCameraView} from './cameraView';
 import {PORTRAIT_ASPECT} from './presentation';
 
@@ -26,7 +26,7 @@ export class GroundedBackdrop {
     applyCameraView(ref,INITIAL_VIEW,scale,focusYcm);
     const projection=new THREE.Matrix4().multiplyMatrices(ref.projectionMatrix,ref.matrixWorldInverse);
     this.material=new THREE.ShaderMaterial({
-      uniforms:{photo:{value:null},projection:{value:projection},photoAspect:{value:16/9},softPhoto:{value:null},focusEnabled:{value:0},focusRange:{value:new THREE.Vector2(-200*scale,-30*scale)}},
+      uniforms:{photo:{value:null},projection:{value:projection},photoAspect:{value:16/9},softPhoto:{value:null},focusEnabled:{value:0},focusRange:{value:new THREE.Vector2(-BACKGROUND_FOCUS_RANGE_CM.far*scale,-BACKGROUND_FOCUS_RANGE_CM.near*scale)}},
       vertexShader:`uniform mat4 projection; varying vec4 photoPosition; varying float worldZ;
         void main(){vec4 world=modelMatrix*vec4(position,1.);photoPosition=projection*world;worldZ=world.z;gl_Position=projectionMatrix*viewMatrix*world;}`,
       fragmentShader:`uniform sampler2D photo; uniform sampler2D softPhoto; uniform float focusEnabled; uniform vec2 focusRange; uniform float photoAspect; varying vec4 photoPosition; varying float worldZ;

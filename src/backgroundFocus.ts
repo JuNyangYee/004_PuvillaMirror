@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 
+export const BACKGROUND_FOCUS_RANGE_CM = Object.freeze({near:30, far:200});
 export interface BackgroundFocusOptions { enabled: boolean; strength: number }
 
 /** Cached, linear-light blur of the photograph only. No character/depth render pass. */

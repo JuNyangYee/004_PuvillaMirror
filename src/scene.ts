@@ -73,7 +73,7 @@ export class Scene {
     this.scene.add(this.characterOutput);
     this.grounded=new GroundedBackdrop(ch.modelScale,ch.focusYcm);
     this.scene.add(this.grounded.root);
-    this.snow=new Snowfall(ch.modelScale,ch.focusYcm,cfg.snow);
+    this.snow=new Snowfall(ch.modelScale,ch.focusYcm,cfg.snow,cfg.backgroundFocus);
     this.scene.add(this.snow.points);
     // 폰·태블릿은 MSAA 끔 (픽셀 밀도가 높아 계단이 덜 보이고 부하는 큼)
     this.renderer = new THREE.WebGLRenderer({ antialias: !lightMobile(), alpha: true, powerPreference: "high-performance" });
