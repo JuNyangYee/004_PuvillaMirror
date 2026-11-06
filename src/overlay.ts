@@ -240,6 +240,10 @@ export class Overlay {
     lighting.add(cfg.scene, 'envLight', 0, 1.5, .01).name('환경 반사').onChange(onS);
     lighting.add({reset:()=>{resetLightDirections(cfg.scene.lightDirections);onS();this.requestSave();}},'reset').name('조명 위치 초기화');
     lighting.close();
+    const focus = this.gui.addFolder("배경 심도 (DOF)");
+    focus.add(cfg.scene.backgroundFocus,"enabled").name("배경 흐림");
+    focus.add(cfg.scene.backgroundFocus,"strength",0,40,1).name("흐림 강도");
+    focus.close();
     const shadow = this.gui.addFolder("발밑 그림자 — 겨울 배경");
     shadow.add(cfg.scene.groundShadow, "enabled").name("그림자 표시").onChange(onS);
     shadow.add(cfg.scene.groundShadow, "opacity", 0, 1, .01).name("진하기").onChange(onS);

@@ -115,3 +115,11 @@ Pose 추가 필터 비교: `body.additionalSmoothing` 기본값은 true다. 설�
 ## 갤러리 필터 업데이트
 
 유화는 galleryFilter.ts가 로드한 공식 갤러리 모듈을 oilFilter.ts에서 실행한다. 조절 UI는 원격 스키마로 생성한다. D 모드에서 버전 확인·시험 렌더·적용·복원이 가능하다. 저장 형식과 배포 지원은 [FILTER_UPDATES.md](FILTER_UPDATES.md)를 참고한다.
+
+## 배경 심도와 짧은 털결
+
+`scene.backgroundFocus`는 겨울 사진에만 적용하는 심도 근사다. 기본 enabled=true, strength=24(1080px 사진 폭 기준 커널 반경), 설정의 배경 심도(DOF) 폴더에서 0~40으로 조절·저장한다. backgroundFocus.ts는 선형 색공간에서 가로/세로 가우시안 블러 2패스를 수행하고 결과를 캐시한다. 사진/강도가 바뀌거나 WebGL 컨텍스트가 복구될 때만 재생성하며 평상시 추가 블러 렌더는 없다. 캐릭터 뒤 30~200cm 구간에서 선명한 사진과 흐린 사진을 점차 혼합한다. 푸빌라·발 접점·전경 바닥에는 블러를 적용하지 않는다. 실제 렌즈의 조리개 보케나 전체 장면 깊이 기반 DOF가 아니며 눈 파티클은 기존 방식으로 그린다. 배경도 기존 유화 원본 렌더를 거치므로 붓 질감이 남는다.
+
+털은 기존 2.9cm에서 1.1cm, 얼굴은 그 0.75배로 줄였다. 14개 셸은 유지하고 subpixel 가닥의 픽셀 점유율을 보정해 AA 폭이 털을 부풀리는 현상을 줄였다. 픽셀 크기보다 작은 표면 결은 점차 줄이는 짧은 방향성 노멀 요철을 추가했으며 기존 털뭉치 세기(bumpCm)로 함께 조절한다. 기본 freq=3.4, minDensity=.28, lean=.45, thickness=.34, bumpCm=1.2, tuftCm=2.2, rootShade=.8. 이전 공개 설정은 lengthCm=2.9, freq=2.9, minDensity=.38, lean=.47, thickness=.41, bumpCm=.8, tuftCm=4.5, rootShade=.72, faceFurScale=1이며 이전 셰이더는 커밋 927c0ac에 남아 있다.
+
+검증: tsc/vite, pipeline:check, camera:view:check, presentation:check 통과. 브라우저에서 유화 켜기/끄기, 회전, 얼굴 확대, GL 오류 없음 확인. 블러 재생성은 동일 설정 0패스, 강도 변경 2패스, 끄기/다시 켜기 0패스로 확인했다.

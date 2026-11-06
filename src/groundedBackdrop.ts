@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {BackgroundFocus, type BackgroundFocusOptions} from './backgroundFocus';
 import {INITIAL_VIEW,applyCameraView} from './cameraView';
 import {PORTRAIT_ASPECT} from './presentation';
 
@@ -17,6 +18,7 @@ export interface GroundShadowOptions {
 export class GroundedBackdrop {
   readonly root = new THREE.Group();
   private material: THREE.ShaderMaterial;
+  private focus = new BackgroundFocus();
   private shadow: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
   constructor(scale: number, focusYcm: number) {
     const floorY=-focusYcm*scale;
@@ -24,12 +26,15 @@ export class GroundedBackdrop {
     applyCameraView(ref,INITIAL_VIEW,scale,focusYcm);
     const projection=new THREE.Matrix4().multiplyMatrices(ref.projectionMatrix,ref.matrixWorldInverse);
     this.material=new THREE.ShaderMaterial({
-      uniforms:{photo:{value:null},projection:{value:projection},photoAspect:{value:16/9}},
-      vertexShader:`uniform mat4 projection; varying vec4 photoPosition;
-        void main(){vec4 world=modelMatrix*vec4(position,1.);photoPosition=projection*world;gl_Position=projectionMatrix*viewMatrix*world;}`,
-      fragmentShader:`uniform sampler2D photo; uniform float photoAspect; varying vec4 photoPosition;
+      uniforms:{photo:{value:null},projection:{value:projection},photoAspect:{value:16/9},softPhoto:{value:null},focusEnabled:{value:0},focusRange:{value:new THREE.Vector2(-200*scale,-30*scale)}},
+      vertexShader:`uniform mat4 projection; varying vec4 photoPosition; varying float worldZ;
+        void main(){vec4 world=modelMatrix*vec4(position,1.);photoPosition=projection*world;worldZ=world.z;gl_Position=projectionMatrix*viewMatrix*world;}`,
+      fragmentShader:`uniform sampler2D photo; uniform sampler2D softPhoto; uniform float focusEnabled; uniform vec2 focusRange; uniform float photoAspect; varying vec4 photoPosition; varying float worldZ;
         void main(){vec2 p=photoPosition.xy/photoPosition.w;vec2 uv=vec2(p.x*(.5625/photoAspect),p.y)*.5+.5;
-          gl_FragColor=texture2D(photo,clamp(vec2(1.-abs(mod(uv.x,2.)-1.),uv.y),vec2(.001),vec2(.999)));
+          uv=clamp(vec2(1.-abs(mod(uv.x,2.)-1.),uv.y),vec2(.001),vec2(.999));
+          vec4 sharp=texture2D(photo,uv);
+          float blur=focusEnabled*(1.-smoothstep(focusRange.x,focusRange.y,worldZ));
+          gl_FragColor=mix(sharp,texture2D(softPhoto,uv),blur);
           #include <colorspace_fragment>
         }`,
       side:THREE.DoubleSide, toneMapped:false,
@@ -60,6 +65,13 @@ export class GroundedBackdrop {
     shadow.rotation.x=-Math.PI/2;shadow.position.set(0,floorY+.012,.18);shadow.renderOrder=1;
     this.root.add(shadow);this.root.visible=false;
   }
+  prepareFocus(renderer:THREE.WebGLRenderer,options:BackgroundFocusOptions):void {
+    const u=this.material.uniforms,photo=u.photo.value as THREE.Texture|null;
+    const active=!!photo && options.enabled && options.strength>0;
+    u.focusEnabled.value=active?1:0;
+    u.softPhoto.value=active?this.focus.prepare(renderer,photo!,u.photoAspect.value,options.strength):photo;
+  }
+  invalidateFocus():void { this.focus.invalidate(); }
   applyShadow(options: GroundShadowOptions): void {
     this.shadow.visible=options.enabled;
     // Keep enough geometry for both fixed foot contacts even at the smallest spread.

@@ -143,16 +143,16 @@
   "fur": {
     "color": "#F2F2F2",
     "shells": 14,
-    "lengthCm": 2.9,
-    "freq": 2.9,
-    "minDensity": 0.38,
-    "lean": 0.47,
-    "thickness": 0.41,
-    "bumpCm": 0.8,
-    "tuftCm": 4.5,
+    "lengthCm": 1.1,
+    "freq": 3.4,
+    "minDensity": 0.28,
+    "lean": 0.45,
+    "thickness": 0.34,
+    "bumpCm": 1.2,
+    "tuftCm": 2.2,
     "roughness": 1,
-    "rootShade": 0.72,
-    "faceFurScale": 1
+    "rootShade": 0.8,
+    "faceFurScale": 0.75
   },
   "face": {
     "inkColor": "#1A1A1F",
@@ -296,6 +296,10 @@
       "depth": 1.6,
       "softness": 1.4,
       "contact": 0.85
+    },
+    "backgroundFocus": {
+      "enabled": true,
+      "strength": 24
     }
   },
   "outfit": {

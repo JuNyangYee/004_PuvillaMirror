@@ -115,7 +115,7 @@ export class Scene {
       log.error("scene", "WebGL context lost");
       this.onLost?.();
     });
-    el.addEventListener("webglcontextrestored", () => log.warn("scene", "WebGL context restored"));
+    el.addEventListener("webglcontextrestored", () => { this.grounded.invalidateFocus(); log.warn("scene", "WebGL context restored"); });
   }
 
   /** 성능 단계에서 렌더 해상도 변경 */
@@ -185,6 +185,7 @@ export class Scene {
   ready = false;
 
   render(): void {
+    this.grounded.prepareFocus(this.renderer,this.cfg.backgroundFocus);
     this.characterOutput.scale.x = this.cfg.outputMirror ? -1 : 1;
     // 눈은 겨울 사진 배경과 같이 장면에 그려져 유화 켜짐/꺼짐 모두 같은 원본 렌더를 탄다
     this.snow.show(this.grounded.root.visible, !!this.filterCfg?.oil?.enabled);

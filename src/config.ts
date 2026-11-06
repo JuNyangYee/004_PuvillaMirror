@@ -1,5 +1,6 @@
 import {DEFAULT_PERSON, type PersonOptions} from "./personSelection";
 import {DEFAULT_RECOGNITION, type RecognitionOptions} from "./recognitionGate";
+import type {BackgroundFocusOptions} from "./backgroundFocus";
 import type {GroundShadowOptions} from "./groundedBackdrop";
 import {enforceLegacyArmTracking} from './armTrackingMode';
 import {enforcePresentation} from "./presentation";
@@ -340,6 +341,8 @@ export interface Config {
     pViewOffsetXcm: number;
     /** 겨울 배경에만 내리는 눈: 켜기 · 양(×, 0~2) · 떨어지는 속도(×) */
     snow: { enabled: boolean; amount: number; speed: number };
+    /** 배경 사진만 흐리게 하며 푸빌라와 발밑은 선명하게 유지한다. */
+    backgroundFocus: BackgroundFocusOptions;
     /** 겨울 사진 바닥 위의 투명 접지 그림자. 크기는 기본 발밑 그림자 대비 배율. */
     groundShadow: GroundShadowOptions;
   };
@@ -541,7 +544,7 @@ export const DEFAULT_CONFIG: Config = {
     enterDurationMs: 600,
     exitDurationMs: 800,
   },
-  fur: { color: "#F2F2F2", shells: 14, lengthCm: 1.8, freq: 3, minDensity: 0.45, lean: 1.0, thickness: 0.35, bumpCm: 0.8, tuftCm: 4.5, roughness: 1, rootShade: 0.72, faceFurScale: 1 },
+  fur: { color: "#F2F2F2", shells: 14, lengthCm: 1.1, freq: 3.4, minDensity: 0.28, lean: 0.45, thickness: 0.34, bumpCm: 1.2, tuftCm: 2.2, roughness: 1, rootShade: 0.8, faceFurScale: 0.75 },
   face: {
     inkColor: "#1A1A1F",
     blushColor: "#F7A1A1",
@@ -632,6 +635,7 @@ export const DEFAULT_CONFIG: Config = {
     layout: "portrait", outputMirror: false, aspect: 9 / 16, viewCenterCm: 133, viewHeightCm: 90, viewOffsetXcm: 0,
     pViewCenterCm: 95, pViewHeightCm: 250, pViewOffsetXcm: 0, centerLongScreens: false,
     snow: { enabled: true, amount: 1, speed: 1 },
+    backgroundFocus: { enabled: true, strength: 24 },
     groundShadow: { enabled: true, opacity: .65, width: 1.2, depth: 1.6, softness: 1.4, contact: .85 },
   },
   outfit: {
