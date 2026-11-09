@@ -1,0 +1,71 @@
+{
+  "_": "공유용 세로 웹(show/)의 항목. 위에서부터 차례로 넘긴다. src·mask는 이 폴더 기준 경로. in/out = 그 구간만 반복(초), n = 마스크 장 수, style = flat|3d, live = 실시간 미믹(iframe), fine = 이 항목만 크레용 잔결 기본값을 바꿀 때(보통은 비워 둔다 — 3D 소스는 필터가 이미 낮춰 둔다). speed = 기준 배속, speeds = [[원본 초, 배속], …] 클립 구간마다([원본 초, 배속, 올림 초]면 그 시각부터 올림 초 동안 앞 배속에서 고르게 바꾼다) — 화면 속 동작 빠르기가 70번 1분 판(1:04)과 같아지는 배속으로, 소스(판)마다 따로 둔다: 70번식 평면 클립(5초 중 앞 3~4초가 멈춘 문장)은 output/70_main-seedance-assets-v1/oil2f_1min/speeds.json 값 그대로(S2 대부분 2배), 10/23 저녁 3D 'm2' · 10초 원테이크(동작을 약 3.5초에 끝내게 쓴 문장)는 1.42배(메인 10/23). 설정 '속도 기준'은 그 위에 곱하는 배율(1:04 = ×1 기본, 1:30 = × 64/90). fixed = 속도 기준과 상관없이 그 배속(공식 쇼츠). vers = 같은 덩어리의 판들({ \"3d\": {…}, \"flat\": {…} }, 안의 값이 바깥 값을 덮는다 — 배속은 판 안에 둔다). 3D판은 style 3d가 저절로 붙는다. src가 null인 판은 자리만 있는 것(목록에 '준비 중'으로 보이고 넘김에서는 빠진다) — 클립이 오면 src · mask · n을 채운다(배속이 다르면 speed · speeds도). look = 에셋별 기본 보기(10/24 65인치 점검판으로 고름, 판 안의 look이 바깥 look을 통째로 덮는다): filter A|B|C|off · level 필터 세기 · grain 결 크기(1 = 1080 그림과 같은 비율, 0.7 = 획 30% 잘게) · fps 기준 프레임수(0 = 필터 기본, 60Hz 화면에서 고르게 나오는 12 · 15 · 20 · 30 권장) · fine 크레용 잔결 · normal 캐릭터 노말. 없으면 A 50 · 결 1 · 필터 기본 프레임수(3D 시험판 · 미믹은 지금 값 그대로). 설정 '에셋별 기본'을 고정으로 두면 쓰지 않는다",
+  "items": [
+    {
+      "title": "눈싸움 · 눈덩이 받기 — 받기 · 기뻐하기 · 정수리 맞기 · 털기 (야외 눈 담벼락, 11/06 · 목도리 고침 v2 · 11/09 눈 털 가림 고침)",
+      "src": "../output/snow/snow_catch_hit_v3eye_1080p.mp4",
+      "style": "3d",
+      "speed": 1,
+      "fixed": true,
+      "look": { "filter": "A", "level": 50, "grain": 0.7, "fps": 20, "normal": false }
+    },
+    {
+      "title": "스노우볼 · 글로브 속 광장 — 흔들면 눈보라 · 눈송이 받기 (11/06)",
+      "src": "../output/snow/snow_globe_1080p.mp4",
+      "style": "3d",
+      "speed": 1,
+      "fixed": true,
+      "look": { "filter": "A", "level": 50, "grain": 0.7, "fps": 20, "normal": false }
+    },
+    {
+      "title": "마을 전경 · 원경 — 눈 내리는 마을, 문간의 친구들 (11/06)",
+      "src": "../output/snow/snow_village_1080p.mp4",
+      "style": "3d",
+      "speed": 1,
+      "fixed": true,
+      "look": { "filter": "A", "level": 50, "grain": 0.7, "fps": 20, "normal": false }
+    },
+    {
+      "title": "세로 1 · 창문 — 엽서를 넣고 손 흔들기",
+      "vers": {
+        "3d": { "src": "../output/m1/S1_window_v3_3d_1080p.mp4", "title": "세로 1 · 창문 모델판 — 등장 · 닦기 · 엽서 넣기 · 톡 · 인사 · 끄고 나감 · 뿌예짐(공식 3D 모델 렌더 · 새 목도리 v3, 10/26)",
+                "speeds": [[0, 1.2], [27.875, 2.13, 0.2]],
+                "look": { "filter": "A", "level": 50, "grain": 0.7, "fps": 20, "normal": false } }
+      }
+    },
+    {
+      "title": "세로 2 · 솜송이 받기 — 빛 · 착지 · 미소 · 나감 · 엽서",
+      "vers": {
+        "3d": { "src": "../output/m1/S2_somsongi_m3_3d_1080p.mp4", "title": "세로 2 · 솜송이 받기 모델판 — 머리 위 솜송이 받기 · 들고 오른쪽 화면 밖으로(공식 3D 모델 렌더 · 새 목도리, 10/26)", "speed": 1.1,
+                "look": { "filter": "A", "level": 50, "grain": 0.7, "fps": 20, "normal": false } }
+      }
+    },
+    {
+      "title": "서브 · 숨바꼭질",
+      "vers": {
+        "3d": { "src": "../output/m1/O1H_hide_m1_3d_1080p.mp4", "speed": 1.2, "title": "서브 · 숨바꼭질 모델판 — 놀이 · 알아챔 · 숨기 · 단서(비니) · 다시 나옴(공식 3D 모델 렌더 · 새 목도리, 10/26)",
+                "look": { "filter": "A", "level": 50, "grain": 0.7, "fps": 20, "normal": false } }
+      }
+    },
+    {
+      "title": "공식 쇼츠 · 푸빌라 이야기 (신세계)",
+      "src": "../output/official/official_story_1080x1920.mp4",
+      "style": "3d",
+      "speed": 1,
+      "fixed": true,
+      "look": { "filter": "A", "level": 50, "grain": 0.7, "fps": 20, "normal": false }
+    },
+    {
+      "title": "공식 쇼츠 · 친구들 (신세계, 미니멀)",
+      "src": "../output/official/official_minimal_1080x1920.mp4",
+      "style": "3d",
+      "speed": 1,
+      "fixed": true,
+      "look": { "filter": "A", "level": 50, "grain": 0.7, "fps": 20, "normal": false }
+    },
+    {
+      "title": "실시간 · 푸빌라 미믹 (카메라)",
+      "live": "../mimic/?embed=1"
+    }
+  ]
+}

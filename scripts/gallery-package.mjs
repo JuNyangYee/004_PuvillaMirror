@@ -1,6 +1,8 @@
 import {createHash} from 'node:crypto';
 export const ENGINE_URL='https://nau-filter-gallery.vercel.app/nau-filter/nau-filter.js';
 export const PAGE_URL='https://nau-filter-gallery.vercel.app/';
+export const SHOW_URL='https://nau-filter-gallery.vercel.app/show/';
+export const ITEMS_URL=new URL('items.json',SHOW_URL).href;
 export const hash=s=>createHash('sha256').update(s).digest('hex');
 // Parse data literals only: never evaluate downloaded JavaScript on the server.
 export function literal(text, start=0) {
@@ -67,4 +69,42 @@ export async function download(url){
  for await(const chunk of r.body){size+=chunk.length;if(size>4e6)throw Error('Upstream file too large');parts.push(chunk);}
  return Buffer.concat(parts).toString('utf8');
 }
-export async function latestPackage(){const [e,p]=await Promise.all([download(ENGINE_URL),download(PAGE_URL)]);return buildPackage(e,p);}
+export function buildShowPackage(engine,page,show,itemsText){
+ const base=buildPackage(engine,page),{id:oldId,...data}=base;
+ if(show.length>4e6||itemsText.length>4e6)throw Error('Show data too large');
+ const modulePath=/import\s*\{[^}]*createFilter[^}]*\}\s*from\s*["']([^"']+)["']/.exec(show)?.[1];
+ if(!modulePath||new URL(modulePath,SHOW_URL).href!==ENGINE_URL)throw Error('Show engine path changed');
+ const versions=decl(show,'VERSIONS'),lookDef=decl(show,'LOOK_DEF'),items=JSON.parse(itemsText).items;
+ if(!Array.isArray(versions)||!versions.length||versions.length>20||!Array.isArray(items)||!items.length)throw Error('Invalid show catalog');
+ const ids=new Set();
+ for(const v of versions){
+  if(typeof v.id!=='string'||ids.has(v.id)||typeof v.name!=='string')throw Error('Invalid show version');ids.add(v.id);
+  for(const k of Object.keys(v))if(!['id','name','about','tune','boil'].includes(k))throw Error('New show version option: '+k);
+  for(const [key,value] of Object.entries({...v.tune,...(v.boil===undefined?{}:{boil:v.boil})})){
+   const spec=data.schema.find(s=>s.key===key);
+   if(!spec||spec.type!=='number'||!Number.isFinite(value)||value<spec.min||value>spec.max)throw Error('Unsupported show parameter: '+key);
+  }
+ }
+ const version=/v:\s*String\(pick\("v",\s*"([^"\n]+)"/.exec(show)?.[1];
+ if(!ids.has(version))throw Error('Show default version changed');
+ // The unparameterized /show/ route opens the first playable entry, 3D before flat.
+ const first=items.flatMap(it=>it.vers?['3d','flat'].filter(k=>it.vers[k]?.src).map(k=>({...it,...it.vers[k],style:k==='3d'?'3d':it.vers[k].style??it.style})):it.src||it.live?[it]:[])[0];
+ if(!first)throw Error('No playable show entry');
+ const look={...lookDef,...first.look};
+ if(look.filter!=='A'||look.normal===true||look.fine!=null)throw Error('Unsupported show look');
+ for(const k of Object.keys(look))if(!['filter','level','fps','fine','grain','normal'].includes(k))throw Error('New show look option: '+k);
+ const grainMatch=/seg\("grains",\s*(\[[^\]]+\])\.map/.exec(show);
+ const grains=grainMatch?literal(grainMatch[1]):null;
+ if(!grains?.length||!grains.every(n=>typeof n==='number'&&n>0&&n<=4)||!grains.includes(look.grain))throw Error('Show grain choices changed');
+ Object.assign(data.defaults,{style:first.style||'flat',level:look.level,fps:look.fps||data.defaults.fps,grain:String(look.grain),showVersion:version});
+ if(!['3d','flat'].includes(data.defaults.style))throw Error('Show style changed');
+ for(const spec of data.schema){spec.default=data.defaults[spec.key];if(spec.type==='number'&&(!Number.isFinite(spec.default)||spec.default<spec.min||spec.default>spec.max))throw Error('Show default out of range: '+spec.key);}
+ data.schema.unshift({key:'showVersion',label:'쇼 유화 버전',type:'enum',default:version,options:versions.map(v=>({value:v.id,label:v.id+' · '+v.name})),help:versions.map(v=>v.id+': '+(v.about||v.name)).join('\n')});
+ data.schema.push({key:'grain',label:'결 크기',type:'enum',default:String(look.grain),options:grains.map(n=>({value:String(n),label:'×'+n}))});
+ Object.assign(data,{pageSource:SHOW_URL,schemaSource:PAGE_URL,pageHash:hash(show),schemaHash:hash(page),itemsSource:ITEMS_URL,itemsHash:hash(itemsText),show:{versions,defaultVersion:version,itemTitle:first.title,look,style:data.defaults.style}});
+ return {...data,id:hash(JSON.stringify(data))};
+}
+export async function latestPackage(){
+ const [e,p,s,i]=await Promise.all([download(ENGINE_URL),download(PAGE_URL),download(SHOW_URL),download(ITEMS_URL)]);
+ return buildShowPackage(e,p,s,i);
+}

@@ -4,14 +4,14 @@ export function galleryControls(parent:HTMLElement,oil:OilSettings,onChange:()=>
  const box=document.createElement('div');parent.append(box);
  function paint(){
   box.replaceChildren();
-  const p=galleryPackage(),v=effectiveValues(oil),caption=document.createElement('p');caption.textContent='갤러리 유화 · '+p.version+' / '+p.date;box.append(caption);
+  const p=galleryPackage(),v=effectiveValues(oil),caption=document.createElement('p');caption.textContent=(p.show?'쇼 유화 · ':'갤러리 유화 · ')+p.version+' / '+p.date;box.append(caption);
   for(const s of [...p.schema].sort((a,b)=>Number(b.key==='level')-Number(a.key==='level'))){
    const row=document.createElement('label');row.style.cssText='display:grid;grid-template-columns:110px 1fr 62px;align-items:center;gap:6px;margin:7px 0';
    row.title=s.help??'';const name=document.createElement('span');name.textContent=s.label;row.append(name);
    if(s.type==='enum'){
     const select=document.createElement('select');select.setAttribute('aria-label',s.label);
     for(const option of s.options??[])select.add(new Option(option.label,option.value));
-    select.value=String(v[s.key]);select.onchange=()=>{oil.gallery!.values[s.key]=select.value;syncGallerySettings(oil);onChange();paint();};row.append(select);
+    select.value=String(v[s.key]);select.onchange=()=>{if(s.key==='showVersion')for(const key of Object.keys(oil.gallery!.values))if(key.includes('.')||key==='boil')delete oil.gallery!.values[key];oil.gallery!.values[s.key]=select.value;syncGallerySettings(oil);onChange();paint();};row.append(select);
    }else{
     const range=document.createElement('input'),num=document.createElement('input');range.type='range';num.type='number';
     for(const input of [range,num]){input.min=String(s.min);input.max=String(s.max);input.step=String(s.step);input.value=String(v[s.key]);input.setAttribute('aria-label',s.label+(input===num?' 값':''));input.style.width='100%';}
@@ -22,8 +22,8 @@ export function galleryControls(parent:HTMLElement,oil:OilSettings,onChange:()=>
    }
    box.append(row);
   }
-  const reset=document.createElement('button');reset.textContent='이 판의 갤러리 기본값으로';reset.onclick=()=>{resetGallerySettings(oil);onChange();paint();};box.append(reset);
-  const info=document.createElement('p');info.style.opacity='.7';info.textContent='기본값·조절 범위는 갤러리에서 가져옵니다. 비교 위치와 처리 해상도는 이 앱의 출력 설정입니다.';box.append(info);
+  const reset=document.createElement('button');reset.textContent=p.show?'쇼 첫 화면 기본값으로':'이 판의 갤러리 기본값으로';reset.onclick=()=>{resetGallerySettings(oil);onChange();paint();};box.append(reset);
+  const info=document.createElement('p');info.style.opacity='.7';info.textContent=p.show?'show/의 버전·첫 화면 기본값과 모듈의 조절 항목을 함께 받습니다. 처리 해상도는 미믹 설정을 사용하며 결 크기는 쇼와 같은 비율로 적용합니다.':'기본값·조절 범위는 갤러리에서 가져옵니다. 비교 위치와 처리 해상도는 이 앱의 출력 설정입니다.';box.append(info);
  }
  paint();
 }
@@ -36,7 +36,7 @@ export function galleryUpdateControls(gui:GUI){
   const d=await r.json().catch(()=>({error:'로컬 개발/미리보기/전시 서버에서 업데이트할 수 있습니다.'}));if(!r.ok)throw Error(d.error);return d;
  };
  const run=async(fn:()=>Promise<void>)=>{if(busy)return;busy=true;try{await fn();}catch(e){text.textContent=String(e)+'\n현재 적용판은 유지됩니다.';}finally{busy=false;}};
- const p=galleryPackage();text.textContent='화면 적용판: '+p.version+' ('+p.date+')\n효과 코드 + 조절 항목·범위·기본값을 함께 받습니다.';
+ const p=galleryPackage();text.textContent=(p.show?'출처: '+p.pageSource+'\n':'')+'화면 적용판: '+p.version+' ('+p.date+')\n효과 코드 + 조절 항목·범위·기본값을 함께 받습니다.';
  folder.add({check:()=>run(async()=>{
   candidate=null;text.textContent='갤러리 최신판 확인 중…';const r=await api('check',{});candidate=r.candidate;
   text.textContent=(r.same?'이미 최신판입니다.':'새 판을 받았습니다.')+'\n'+candidate!.version+' / '+candidate!.date+'\n조절 항목 '+candidate!.schema.length+'개\n적용하면 이 판의 기본값을 사용합니다.';

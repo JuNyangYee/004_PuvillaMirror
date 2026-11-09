@@ -37,18 +37,29 @@ export async function testGallery(p:GalleryPackage):Promise<Factory>{
    let changed:any=(fx as any)._debug;for(const key of s.key.split('.'))changed=changed?.[key];
    if(changed!==alternate)throw Error('필터 파라미터 조절 실패: '+s.key);
   }
+  for(const version of p.show?.versions??[]){
+   const oil={gallery:{revision:p.id,history:{},values:{showVersion:version.id}}};
+   const options=engineOptions(oil,256,p);fx.set({tune:null});fx.set(options);
+   const expected=effectiveValues(oil,p);
+   for(const key of ['fps','boil','style','level'])if((fx as any).options[key]!==expected[key])throw Error('Show option mismatch: '+key);
+   for(const [key,value] of Object.entries(options.tune)){let actual:any=(fx as any)._debug;for(const part of key.split('.'))actual=actual?.[part];if(actual!==value)throw Error('Show tune mismatch: '+key);}
+   if(!fx.render(src,{time:1,force:true})||fx.gl.getError()!==fx.gl.NO_ERROR)throw Error('Show version render failed: '+version.id);
+  }
   fx.render(src,{time:1,force:true});
   if(fx.gl.getError()!==fx.gl.NO_ERROR)throw Error('필터 조절 후 GPU 오류');
  }finally{fx?.dispose();}
  return create;
 }
-export function effectiveValues(oil:OilSettings):Record<string,number|string>{
- const vals={...active.defaults},overrides=oil.gallery?.values??{},level=Number(overrides.level??vals.level)/100,style=overrides.style??'flat';
- for(const row of active.levels.rows){
+export function effectiveValues(oil:Pick<OilSettings,'gallery'>,p:GalleryPackage=active):Record<string,number|string>{
+ const vals={...p.defaults},overrides=oil.gallery?.values??{},level=Number(overrides.level??vals.level)/100,style=overrides.style??vals.style??'flat';
+ for(const row of p.levels.rows){
   let [key,lo,mid,hi]=row;const path=key.replace(/^state\./,'');mid??=vals[path];
   if(style==='3d'&&row.length>4){lo=row[4];mid=row[5]??mid;hi=row[6];}
   if(typeof mid==='number')vals[path]=level<=.5?lo*(1-level*2)+mid*level*2:mid*(2-level*2)+hi*(level*2-1);
  }
+ const selected=String(overrides.showVersion??vals.showVersion??'');
+ const versions=p.show?.versions??[],index=versions.findIndex((v:any)=>v.id===selected);
+ for(const v of versions.slice(0,index+1)){Object.assign(vals,v.tune);if(v.boil!==undefined)vals.boil=v.boil;}
  return {...vals,...overrides};
 }
 export function syncGallerySettings(oil:OilSettings){
@@ -80,7 +91,8 @@ export async function initializeGallery(oil:OilSettings){
  migrate(oil);
 }
 export function createGalleryEngine(canvas:HTMLCanvasElement){return factory(canvas,{filter:'oil2f',normal:false,short:256});}
-export function engineOptions(oil:OilSettings,short:number){
- const v=effectiveValues(oil),tune=Object.fromEntries(Object.entries(oil.gallery?.values??{}).filter(([k])=>k.includes('.')));
- return {filter:'oil2f',short,normal:false,level:v.level,style:v.style,boil:v.boil,fps:v.fps,grade:v.grade,tune};
+export function engineOptions(oil:Pick<OilSettings,'gallery'>,short:number,p:GalleryPackage=active){
+ const v=effectiveValues(oil,p),versions=p.show?.versions??[],index=versions.findIndex((s:any)=>s.id===String(v.showVersion));
+ const tune=Object.assign({},...versions.slice(0,index+1).map((s:any)=>s.tune??{}),Object.fromEntries(Object.entries(oil.gallery?.values??{}).filter(([k])=>k.includes('.'))));
+ return {filter:'oil2f',short,normal:false,level:v.level,style:v.style,boil:v.boil,fps:v.fps,grade:v.grade,tune,...(p.show?{px:short/1080*Number(v.grain)}:{})};
 }
