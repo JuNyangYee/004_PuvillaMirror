@@ -14,7 +14,7 @@
     "exposureCompensation": 0,
     "brightness": 128,
     "contrast": 128,
-    "controlsHidden": false
+    "controlsHidden": true
   },
   "tracker": {
     "modelPath": "./models/face_landmarker.task",
@@ -44,7 +44,7 @@
       "left": 0.05,
       "right": 0.05,
       "top": 0.02,
-      "bottom": 0.02
+      "bottom": 0
     },
     "prepareArea": 0.02,
     "activeArea": 0.08,
@@ -231,35 +231,35 @@
     "armPawFrame": true,
     "armImagePalm": true,
     "armFollowPose": true,
-    "armBendSpread": 0.45,
     "armTrackingMode": "legacy",
+    "armSevereOverlap": true,
     "armHybridFollow": 0,
-    "armSevereOverlap": true
+    "armBendSpread": 0.45
   },
   "scene": {
     "bgTop": "#F76A4B",
     "bgBottom": "#E2462A",
-    "exposure": 1,
+    "exposure": 1.07,
     "cameraTiltDeg": -6,
     "cameraYawDeg": 0,
-    "keyLight": 1.95,
-    "fillLight": 1.3,
-    "rimLight": 2.4,
+    "keyLight": 1.8,
+    "fillLight": 1.95,
+    "rimLight": 0.9,
     "bounceLight": 0.3,
-    "hemiLight": 0.9,
-    "envLight": 0.07,
+    "hemiLight": 1.04,
+    "envLight": 0.3,
     "lightDirections": {
       "key": {
-        "azimuth": -38,
+        "azimuth": -41,
         "elevation": 32
       },
       "fill": {
-        "azimuth": 55,
-        "elevation": 22
+        "azimuth": 79,
+        "elevation": 29
       },
       "rim": {
-        "azimuth": -125,
-        "elevation": 24
+        "azimuth": -118,
+        "elevation": 39
       },
       "bounce": {
         "azimuth": 15,
@@ -267,11 +267,11 @@
       }
     },
     "winterLightColors": {
-      "key": "#fff5e8",
-      "fill": "#ccd3e6",
-      "rim": "#ffd09a",
+      "key": "#ffd7b3",
+      "fill": "#ffeadb",
+      "rim": "#ffa66b",
       "bounce": "#d8dcea",
-      "sky": "#b9c5df",
+      "sky": "#b3cbff",
       "ground": "#d8dbe5"
     },
     "layout": "portrait",
@@ -289,6 +289,10 @@
       "amount": 0.7,
       "speed": 0.4
     },
+    "backgroundFocus": {
+      "enabled": true,
+      "strength": 14
+    },
     "groundShadow": {
       "enabled": true,
       "opacity": 0.65,
@@ -296,10 +300,6 @@
       "depth": 1.6,
       "softness": 1.4,
       "contact": 0.85
-    },
-    "backgroundFocus": {
-      "enabled": true,
-      "strength": 24
     }
   },
   "outfit": {
@@ -343,16 +343,16 @@
     "posterLevels": 0,
     "oil": {
       "enabled": true,
-      "strength": 0.29,
+      "strength": 0.22,
       "size": 1.23,
       "boil": 0.02,
-      "fps": 15,
+      "fps": 20,
       "shortSide": 1080,
       "res": 1,
       "grade": 1,
       "split": 0,
       "gallery": {
-        "revision": "c539bff6405db398123b1eb468f74a50d3dea6e60a85110fd755325c82b24861",
+        "revision": "266141c38e968fac85ab5584e960c9c5f236fee9336bc9a7c21f000dd06bf6da",
         "values": {},
         "history": {
           "legacy": {
@@ -361,7 +361,10 @@
             "boil": 0.05,
             "fps": 12,
             "grade": 1
-          }
+          },
+          "c539bff6405db398123b1eb468f74a50d3dea6e60a85110fd755325c82b24861": {},
+          "a7af1055a24da5f54721b124718a14cebd692dc4642a1318e035b43dfe5d51d0": {},
+          "be1a4f3cc6504eab0499185453fd523cbe907c6da6c886a1f4f02a39320ad46f": {}
         }
       }
     }
