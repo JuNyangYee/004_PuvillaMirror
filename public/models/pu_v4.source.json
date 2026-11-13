@@ -1,0 +1,49 @@
+{
+  "source": "Puvilla_rig_muffler_v4.blend",
+  "sourceSha256": "74896e249e80485093fb62e2611e839df233cf9446e2e342baa0d3ea4fbac04c",
+  "sourceUnchanged": true,
+  "blenderVersion": "5.2.0 LTS",
+  "parts": [
+    {
+      "name": "pu_body",
+      "vertices": 1886,
+      "faces": 1884
+    },
+    {
+      "name": "pu_eyes_L",
+      "vertices": 614,
+      "faces": 648
+    },
+    {
+      "name": "pu_eyes_R",
+      "vertices": 614,
+      "faces": 648
+    },
+    {
+      "name": "pu_nose",
+      "vertices": 164,
+      "faces": 162
+    }
+  ],
+  "scarfVertices": 94888,
+  "scarfTriangles": 189832,
+  "colorSpace": "linear RGB, quantized u8",
+  "boneMap": {
+    "hips": 0,
+    "spine": 1,
+    "chest": 2,
+    "head": 3,
+    "shoulder.L": 2,
+    "shoulder.R": 2,
+    "upper_arm.L": 4,
+    "forearm.L": 5,
+    "hand.L": 5,
+    "upper_arm.R": 6,
+    "forearm.R": 7,
+    "hand.R": 7
+  },
+  "limitations": [
+    "Blender IK controls are not imported; app tracking drives its runtime skeleton.",
+    "Shrinkwrap evaluated in rest pose; Blender live corrective modifiers are not run in browser."
+  ]
+}

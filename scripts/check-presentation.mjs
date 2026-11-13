@@ -13,7 +13,8 @@ cfg.filter.enabled=true;const oil=structuredClone(cfg.filter.oil),camera=structu
 const result=enforcePresentation(cfg);
 assert.equal(result.scene.layout,'portrait');assert.equal(result.scene.aspect,9/16);
 assert.equal(result.outfit.style,'christmas');assert.equal(result.outfit.seatBody,false);assert.equal(result.outfit.sitBody,false);
-assert.equal(result.character.model,'puuvilla');assert.equal(result.character.modelPath,'./models/pu_stand.obj');
+assert.equal(result.character.model,'puuvilla');assert.equal(result.character.modelPath,'./models/pu_v4.obj');
+assert.equal(result.outfit.muffler.fittedPath,'./models/pu_muffler_v4.bin');
 assert.equal(result.filter.enabled,false);assert.deepEqual(result.filter.oil,oil);assert.deepEqual(result.camera,camera);
 assert.equal(result.scene.outputMirror,true);assert.equal(result.scene.pViewCenterCm,145);
 console.log('PASS: portrait fit, legacy layout/model overrides, independent operator preferences');

@@ -11,7 +11,7 @@ import {StandingCageSurface} from './standingCageSurface';
 import {clearStandingForearm,resolveStandingHeadContact,clearStandingUpper,resolveStandingUpperContact,limitStandingContactMotion} from './standingHeadClearance';
 import {StandingPawTracking} from './standingPawTracking';
 import { fillMouthGroove, smoothDepth } from "./mouthRig";
-import { bakeKnitShadow, bakeVertexColors, fitMuffler, loadFitted, loadMuffler, makeKnitMaterial, pca, type MufflerSrc } from "./outfit";
+import { applyKnitPalette, bakeKnitShadow, bakeVertexColors, fitMuffler, loadFitted, loadMuffler, makeKnitMaterial, pca, type MufflerSrc } from "./outfit";
 import { makeBodyMaterial, makeInkMaterial, makeScarfMaterial, type FaceUniforms, type FurUniforms } from "./puuvillaShaders";
 import { StandingArmSurface } from "./standingArmSurface";
 import { socketNormalProbes } from "./standingSocketNormals";
@@ -643,8 +643,8 @@ export class PuuvillaCharacter implements CharacterRig {
       }
     }
 
-    // 목도리 맞추기용 (attachMuffler)
-    this.outfitBase = bodyGeo && (oldRing.length || this.sit) ? { body: bodyGeo, ring: oldRing, skeleton } : null;
+    // Pre-fitted v4 scarf needs the body skeleton, not the removed classic scarf ring.
+    this.outfitBase = bodyGeo ? { body: bodyGeo, ring: oldRing, skeleton } : null;
     if (this.sit && !sitMouth) log.warn("character", "앉은 메쉬에 입선(pu_mouth) 없음 — 기본 입 위치");
     this.setOutfit(cfg.outfit.style);
 
@@ -817,6 +817,7 @@ export class PuuvillaCharacter implements CharacterRig {
   /** 원본(FBX 좌표)에서 맞춰서 붙임. 맞춘 지오메트리(rest cm + 정점 색)를 돌려줌 */
   async attachMuffler(src: MufflerSrc): Promise<THREE.BufferGeometry | null> {
     if (!this.outfitBase) return null;
+    if (!this.outfitBase.ring.length) throw new Error('This model requires its pre-fitted scarf asset');
     const t1 = performance.now();
     const mc = this.cfg.outfit.muffler;
     const mg = fitMuffler(src, this.outfitBase.body, this.outfitBase.ring, mc);
@@ -831,6 +832,7 @@ export class PuuvillaCharacter implements CharacterRig {
   addMufflerMesh(mg: THREE.BufferGeometry): void {
     if (!this.outfitBase) return;
     const oc = this.cfg.outfit;
+    applyKnitPalette(mg, oc.muffler);
     this.xmasMeshes.forEach((o) => o.parent?.remove(o));
     this.xmasMeshes.length = 0;
     if (this.seat) {
@@ -870,7 +872,9 @@ export class PuuvillaCharacter implements CharacterRig {
         g.getAttribute("skinWeight").needsUpdate = true;
       }
       this.applySkinWeights(mg, oc.muffler.headFollow, false, (q) => smooth(102, 114, q.y));
-    } else this.applySkinWeights(mg, 0.45, false);
+    } else if (!mg.getAttribute('skinIndex') || !mg.getAttribute('skinWeight')) {
+      this.applySkinWeights(mg, 0.45, false);
+    }
     // 목도리 밑 몸 털은 눕힘(aCover) — 안 하면 목도리 사이·가장자리로 흰 털이 삐져나옴
     {
       const mp = mg.getAttribute("position");

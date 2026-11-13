@@ -104,7 +104,7 @@
   },
   "character": {
     "model": "puuvilla",
-    "modelPath": "./models/pu_stand.obj",
+    "modelPath": "./models/pu_v4.obj",
     "subdivLevels": 2,
     "modelScale": 0.04,
     "sitModelPath": "./models/pu_sit.obj",
@@ -239,27 +239,27 @@
   "scene": {
     "bgTop": "#F76A4B",
     "bgBottom": "#E2462A",
-    "exposure": 1.07,
+    "exposure": 1,
     "cameraTiltDeg": -6,
     "cameraYawDeg": 0,
-    "keyLight": 1.8,
-    "fillLight": 1.95,
-    "rimLight": 0.9,
-    "bounceLight": 0.3,
-    "hemiLight": 1.04,
-    "envLight": 0.3,
+    "keyLight": 1.75,
+    "fillLight": 1.15,
+    "rimLight": 0.65,
+    "bounceLight": 0.25,
+    "hemiLight": 0.9,
+    "envLight": 0.13,
     "lightDirections": {
       "key": {
-        "azimuth": -41,
+        "azimuth": -38,
         "elevation": 32
       },
       "fill": {
-        "azimuth": 79,
-        "elevation": 29
+        "azimuth": 55,
+        "elevation": 22
       },
       "rim": {
-        "azimuth": -118,
-        "elevation": 39
+        "azimuth": -125,
+        "elevation": 24
       },
       "bounce": {
         "azimuth": 15,
@@ -267,12 +267,12 @@
       }
     },
     "winterLightColors": {
-      "key": "#ffd7b3",
-      "fill": "#ffeadb",
-      "rim": "#ffa66b",
-      "bounce": "#d8dcea",
-      "sky": "#b3cbff",
-      "ground": "#d8dbe5"
+      "key": "#fff2ed",
+      "fill": "#d7dcf5",
+      "rim": "#f5b06e",
+      "bounce": "#d5d3ed",
+      "sky": "#c4c5e9",
+      "ground": "#ded9e8"
     },
     "layout": "portrait",
     "outputMirror": false,
@@ -291,7 +291,7 @@
     },
     "backgroundFocus": {
       "enabled": true,
-      "strength": 14
+      "strength": 5
     },
     "groundShadow": {
       "enabled": true,
@@ -307,12 +307,12 @@
     "sitBody": false,
     "seatBody": false,
     "muffler": {
-      "fittedPath": "./models/muffler_fit.bin",
+      "fittedPath": "./models/pu_muffler_v4.bin",
       "path": "./models/muffler.bin",
       "colorMap": "./models/muffler_color.jpg",
       "tint": "#ffffff",
-      "red": "#B3210F",
-      "cream": "#E9DDC9",
+      "red": "#982c43",
+      "cream": "#e2c7ba",
       "headFromY": 128,
       "headFollow": 0.3,
       "scale": 1,

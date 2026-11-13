@@ -733,6 +733,25 @@ export function makeKnitMaterial(mc: Config["outfit"]["muffler"]): THREE.MeshSta
   return m;
 }
 
+/** Recolor the authored two-color knit without changing stripe boundaries or geometry. */
+export function applyKnitPalette(g: THREE.BufferGeometry, mc: Config['outfit']['muffler']): void {
+  const palette = g.userData.knitPalette as { red: number[]; cream: number[] } | undefined;
+  const colors = g.getAttribute('color');
+  if (!palette || !colors) return;
+  const red = new THREE.Color(mc.red), cream = new THREE.Color(mc.cream);
+  const delta = palette.cream.map((v, i) => v - palette.red[i]);
+  const lengthSq = delta.reduce((s, v) => s + v * v, 0);
+  if (lengthSq < 1e-6) return;
+  const c = new THREE.Color();
+  for (let i = 0; i < colors.count; i++) {
+    const original = [colors.getX(i), colors.getY(i), colors.getZ(i)];
+    const t = Math.max(0, Math.min(1, original.reduce((s, v, k) => s + (v - palette.red[k]) * delta[k], 0) / lengthSq));
+    c.copy(red).lerp(cream, t);
+    colors.setXYZ(i, c.r, c.g, c.b);
+  }
+  colors.needsUpdate = true;
+}
+
 /**
  * 맞춘 목도리(기존 곰 rest 좌표 cm + 정점 색)를 파일로 — 맞추기가 폰에선 10초 넘게 걸려서 개발 PC 에서 한 번 구워 둠.
  * 포맷: [u32 헤더 길이][JSON {verts, tris, colors}][f32 pos][u8 rgb (4바이트 정렬)][u32 index]
@@ -769,7 +788,7 @@ export async function loadFitted(url: string): Promise<THREE.BufferGeometry | nu
   const buf = await res.arrayBuffer();
   if (buf.byteLength < 8) return null;
   const len = new DataView(buf).getUint32(0, true);
-  let h: { verts: number; tris: number; colors: boolean };
+  let h: { verts: number; tris: number; colors: boolean; skin?: boolean; palette?: { red: number[]; cream: number[] } };
   try {
     h = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, len)));
   } catch {
@@ -777,6 +796,7 @@ export async function loadFitted(url: string): Promise<THREE.BufferGeometry | nu
   }
   let off = 4 + len;
   const g = new THREE.BufferGeometry();
+  if (h.palette) g.userData.knitPalette = h.palette;
   g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(buf.slice(off, off + h.verts * 12)), 3));
   off += h.verts * 12;
   if (h.colors) {
@@ -787,6 +807,24 @@ export async function loadFitted(url: string): Promise<THREE.BufferGeometry | nu
     off += Math.ceil((h.verts * 3) / 4) * 4;
   }
   g.setIndex(new THREE.BufferAttribute(new Uint32Array(buf.slice(off, off + h.tris * 12)), 1));
+  off += h.tris * 12;
+  if (h.skin) {
+    if (buf.byteLength !== off + h.verts * 24) throw new Error('Invalid fitted scarf skin data');
+    const indices = new Uint16Array(buf.slice(off, off + h.verts * 8));
+    off += h.verts * 8;
+    const weights = new Float32Array(buf.slice(off, off + h.verts * 16));
+    for (let i = 0; i < h.verts; i++) {
+      let sum = 0;
+      for (let j = 0; j < 4; j++) {
+        const k = i * 4 + j;
+        if (indices[k] > 7 || !Number.isFinite(weights[k]) || weights[k] < 0) throw new Error('Invalid scarf bone weight');
+        sum += weights[k];
+      }
+      if (Math.abs(sum - 1) > 0.001) throw new Error('Scarf weights must sum to one');
+    }
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(indices, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
+  }
   g.computeVertexNormals();
   return g;
 }

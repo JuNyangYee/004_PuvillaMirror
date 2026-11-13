@@ -4,7 +4,7 @@ export type LightDirections = Record<LightRole, LightDirection>;
 export type WinterLightColors = Record<LightRole | 'sky' | 'ground', string>;
 /** Balanced winter dusk: muted blue-violet fill and soft amber village light. */
 export const DEFAULT_WINTER_LIGHT_COLORS: WinterLightColors = {
-  key: '#fff5e8', fill: '#ccd3e6', rim: '#ffd09a', bounce: '#d8dcea', sky: '#b9c5df', ground: '#d8dbe5',
+  key: '#fff2ed', fill: '#d7dcf5', rim: '#f5b06e', bounce: '#d5d3ed', sky: '#c4c5e9', ground: '#ded9e8',
 };
 
 /** Front is 0°, right is +90°, back is ±180°. Positions stay fixed in the scene when orbiting. */

@@ -507,7 +507,7 @@ export const DEFAULT_CONFIG: Config = {
   expression: { smileThreshold: 0.45, surpriseJaw: 0.35, surpriseBrow: 0.35, dwellMs: 250 },
   character: {
     model: "puuvilla",
-    modelPath: "./models/pu_stand.obj",
+    modelPath: "./models/pu_v4.obj",
     subdivLevels: 2,
     modelScale: 0.04,
     sitModelPath: "./models/pu_sit.obj",
@@ -643,7 +643,7 @@ export const DEFAULT_CONFIG: Config = {
     sitBody: false,
     seatBody: false, // 메인 화면은 서 있는 목도리 모델로 고정
     muffler: {
-      fittedPath: "./models/muffler_fit.bin", path: "./models/muffler.bin", colorMap: "./models/muffler_color.jpg", tint: "#ffffff",
+      fittedPath: "./models/pu_muffler_v4.bin", path: "./models/muffler.bin", colorMap: "./models/muffler_color.jpg", tint: "#ffffff",
       red: "#B3210F", cream: "#E9DDC9", headFromY: 128, headFollow: 0.3, scale: 1.0, offsetX: 0, offsetY: 0, offsetZ: 0, gapCm: 0.8, smoothCm: 3, hugMaxCm: 10, hugInsetCm: 3, liftMaxCm: 4, topCapCm: 0, topCapBackCm: 140,
       srcRingFromY: 1.75, srcHingeY: 1.5,
     },
