@@ -42,8 +42,11 @@
     "forearm.R": 7,
     "hand.R": 7
   },
+  "bodyRig": "pu_v4.rig.json",
+  "bodySkin": "Source weights mapped to runtime bones; dual quaternion skinning, source corrective smoothing, then subdivision.",
   "limitations": [
     "Blender IK controls are not imported; app tracking drives its runtime skeleton.",
-    "Shrinkwrap evaluated in rest pose; Blender live corrective modifiers are not run in browser."
+    "Shoulder groups follow chest, hands follow forearms; independent shoulder shrug and hand bones are not imported.",
+    "Scarf Shrinkwrap is evaluated in rest pose only; body Corrective Smooth is evaluated in the runtime."
   ]
 }

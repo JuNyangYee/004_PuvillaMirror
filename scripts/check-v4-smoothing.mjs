@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {parseObj,fixInvertedWinding} from '../src/character/subdivide.ts';
+import {NativeCorrectiveSmooth} from '../src/character/nativeCorrectiveSmooth.ts';
+const rig=JSON.parse(readFileSync('public/models/pu_v4.rig.json','utf8'));
+const mesh=parseObj(readFileSync('public/models/pu_v4.obj','utf8')).find(p=>p.name==='pu_body');fixInvertedWinding(mesh);
+assert.equal(rig.nativeWeights.length,mesh.positions.length);
+rig.nativeWeights.forEach(w=>{assert.equal(w.length,8);assert.ok(w.every(v=>v>=0&&Number.isFinite(v)));assert.ok(Math.abs(w.reduce((a,b)=>a+b,0)-1)<1e-6);});
+const smoother=new NativeCorrectiveSmooth(mesh.positions,mesh.faces,rig.smooth);
+const restPositions=mesh.positions.flat();
+const rest=Float64Array.from(restPositions);smoother.apply(rest);
+assert.ok(rest.every((v,i)=>Math.abs(v-restPositions[i])<1e-6),'rest shape preserved');
+const fixture=JSON.parse(readFileSync('scripts/fixtures/v4-smooth-oracle.json','utf8'));
+const posed=Float64Array.from(fixture.input.flat());smoother.apply(posed);
+const expected=fixture.expected.flat(),errors=Array.from(posed,(v,i)=>Math.abs(v-expected[i]));
+const max=Math.max(...errors),rms=Math.sqrt(errors.reduce((s,v)=>s+v*v,0)/errors.length);
+console.log(JSON.stringify({maxErrorCm:max,rmsErrorCm:rms}));
+assert.ok(max<.002,'runtime smoothing matches Blender modifier within 0.002 cm');

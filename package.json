@@ -11,6 +11,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
+    "model:v4:check": "node --experimental-transform-types scripts/check-v4-model.mjs && node --experimental-transform-types scripts/check-v4-smoothing.mjs",
     "arm:dropout:check": "node --experimental-transform-types scripts/check-body-session.mjs",
     "response:check": "node --experimental-transform-types scripts/check-neutral-response.mjs",
     "person:check": "node --experimental-transform-types scripts/check-person-roi.mjs",

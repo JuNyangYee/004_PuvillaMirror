@@ -15,11 +15,23 @@
 
 기존 모델과 좌표축·정점 순서·면 방향을 맞춰 비교하면 몸체·눈·코의 토폴로지가 같습니다. 최대 좌표 차이는 0.000051 cm 미만으로 기존 추적 리그를 유지할 수 있습니다. 목도리는 94,888 정점, 189,832 삼각형이며, 원본 가중치를 앱의 8개 본에 대응시킵니다. 목도리는 실행 시 별도 바이너리를 자동 로드하므로 사용자가 수동으로 업로드할 필요는 없습니다. 배포에는 OBJ와 목도리 BIN이 모두 필요합니다.
 
-Blender의 IK 컨트롤과 실시간 보정 모디파이어를 브라우저에서 실행하지는 않습니다. Shrinkwrap은 rest pose에서 구워 넣으며, 움직임은 기존 웹캠 추적 리그가 구동합니다.
+Blender IK 컨트롤은 가져오지 않으며 웹캠 추적 리그가 움직임을 구동합니다. 목도리 Shrinkwrap은 rest pose에서 구워 넣고, 몸체 Corrective Smooth는 실행 시 계산합니다.
+
+## 팔을 올릴 때 몸통 변형 수정
+
+기존 v4 적용에서는 형상만 교체하고 이전 모델용 팔 웨이트·관절·보정을 재사용했습니다. 원본의 Corrective Smooth도 빠져 있어 만세 자세에서 겨드랑이와 몸통 옆선이 달라졌습니다.
+
+v4는 `public/models/pu_v4.rig.json`을 자동 로드합니다. 원본 웨이트를 앱의 8개 본에 대응시키고 원본 팔 관절과 dual quaternion 스키닝을 사용합니다. 케이지에 LENGTH_WEIGHTED Corrective Smooth(계수 0.5, 10회, csmooth 그룹)를 적용한 뒤 subdivision을 계산하며 기존 팔 주변 표면 교체 경로에 반영합니다. 기존 둥근 팔꿈치·어깨 보정은 중복 적용하지 않습니다. 얼굴 표정 처리와 이전 모델의 리그 경로는 유지합니다. 배포 시 RIG JSON도 포함해야 합니다.
+
+어깨 그룹은 가슴, 손 그룹은 아래팔에 대응하므로 독립적인 어깨 들썩임과 손 본까지 Blender와 동일하지는 않습니다.
+
+`npm run model:v4:check`는 모델 데이터 및 Blender에서 추출한 보정 결과를 검증합니다. 보정 단계 단독 비교의 최대 오차는 약 0.00008 cm이며 전체 IK 포즈 일치를 의미하지 않습니다. 기준 데이터는 `scripts/fixtures/v4-smooth-oracle.json`, 재추출 스크립트는 `scripts/export-v4-smooth-fixture.py`입니다.
+
+`dev/v4-rig-review.html`은 같은 v4 모델의 수정 전/후를 동일 입력·카메라·조명으로 비교합니다. 7개 자세와 정면·측면·후면·위쪽 4개 시점으로 확인했으며, 팔·고개를 함께 움직이는 120프레임 수치 검사도 통과했습니다. 실제 웹캠 참여자 검증은 별도입니다.
 
 ```powershell
 & 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' -b 'D:\2026-09_ShinsegaeChristmas\005_3D-Works\003_PuvillaRig\Puvilla_rig_muffler_v4.blend' --python scripts/export-puvilla-v4.py
-node --experimental-transform-types scripts/check-v4-model.mjs
+npm run model:v4:check
 ```
 
 ## 색감과 배경

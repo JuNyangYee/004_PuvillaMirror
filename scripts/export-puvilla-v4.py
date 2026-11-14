@@ -38,6 +38,44 @@ for name in ['pu_body', 'pu_eyes_L', 'pu_eyes_R', 'pu_nose']:
     parts.append({'name': name, 'vertices': len(obj.data.vertices), 'faces': len(obj.data.polygons)})
 OUT.joinpath('pu_v4.obj').write_text('\n'.join(lines) + '\n', encoding='utf8')
 
+# OBJ parsing assigns local indices on first face use, not Blender vertex order.
+body = bpy.data.objects['pu_body']
+order = list(dict.fromkeys(i for f in body.data.polygons for i in f.vertices))
+native_map = {'hips': 0, 'spine': 1, 'chest': 2, 'head': 3,
+              'ear.L': 3, 'ear.R': 3, 'shoulder.L': 2, 'shoulder.R': 2,
+              'upper_arm.L': 4, 'forearm.L': 5, 'hand.L': 5,
+              'upper_arm.R': 6, 'forearm.R': 7, 'hand.R': 7}
+for side in ['L', 'R']:
+    for name in ['thigh', 'shin', 'foot']:
+        native_map[name + '.' + side] = 0
+native_weights = []
+for vi in order:
+    weights = [0.] * 8
+    for group in body.data.vertices[vi].groups:
+        name = body.vertex_groups[group.group].name
+        if name in native_map:
+            weights[native_map[name]] += group.weight
+    total = sum(weights)
+    assert total > 0
+    native_weights.append([w / total for w in weights])
+rig = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
+def bone_point(name, end=False):
+    b = rig.data.bones[name]
+    p = rig.matrix_world @ (b.tail_local if end else b.head_local)
+    return [p.x, p.z, -p.y]
+native = {'version': 1, 'body': 'pu_body', 'source': source.name,
+          'rest': [list(point(body, body.data.vertices[i])) for i in order],
+          'weights': [[w[4]+w[5], w[6]+w[7], w[5]+w[7]] for w in native_weights],
+          'nativeWeights': native_weights,
+          'joints': {s: {'shoulder': bone_point('upper_arm.'+s),
+                         'elbow': bone_point('forearm.'+s),
+                         'hand': bone_point('forearm.'+s, True)} for s in ['L','R']}}
+modifier = next(m for m in body.modifiers if m.type == 'CORRECTIVE_SMOOTH')
+smooth_group = body.vertex_groups[modifier.vertex_group].index
+native['smooth'] = {'factor': modifier.factor, 'iterations': modifier.iterations,
+                    'weights': [next((g.weight for g in body.data.vertices[i].groups if g.group == smooth_group),0.) for i in order]}
+OUT.joinpath('pu_v4.rig.json').write_text(json.dumps(native, separators=(',', ':'))+'\n', encoding='utf8')
+
 obj = bpy.data.objects['pu_muffler']
 evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
 mesh = evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=bpy.context.evaluated_depsgraph_get())
@@ -99,7 +137,10 @@ report = {'source': source.name, 'sourceSha256': source_hash,
           'sourceUnchanged': True, 'blenderVersion': bpy.app.version_string,
           'parts': parts, 'scarfVertices': n, 'scarfTriangles': len(indices) // 3,
           'colorSpace': 'linear RGB, quantized u8', 'boneMap': bone_map,
+          'bodyRig': 'pu_v4.rig.json',
+          'bodySkin': 'Source weights mapped to runtime bones; dual quaternion skinning, source corrective smoothing, then subdivision.',
           'limitations': ['Blender IK controls are not imported; app tracking drives its runtime skeleton.',
-                          'Shrinkwrap evaluated in rest pose; Blender live corrective modifiers are not run in browser.']}
+                          'Shoulder groups follow chest, hands follow forearms; independent shoulder shrug and hand bones are not imported.',
+                          'Scarf Shrinkwrap is evaluated in rest pose only; body Corrective Smooth is evaluated in the runtime.']}
 OUT.joinpath('pu_v4.source.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf8')
 print(json.dumps(report, indent=2))

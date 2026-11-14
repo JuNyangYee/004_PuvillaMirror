@@ -15,6 +15,7 @@ const EMBED = [
   "filter/current.json",
   "models/pu_stand.obj",
   "models/pu_v4.obj",
+  "models/pu_v4.rig.json",
   "models/pu_muffler_v4.bin",
   "models/stand_connected_rig.json",
   "models/stand_connected_cage_mirrorleft.json",

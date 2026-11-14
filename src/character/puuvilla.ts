@@ -97,7 +97,7 @@ interface ArmRig {
 
 /** 팔 분리 케이지의 관절 (pu_stand_arm.json — scripts/stand_arm_split.py). 앱 cm */
 interface ArmJoints { R: { shoulder: number[]; elbow: number[]; hand: number[] }; L: { shoulder: number[]; elbow: number[]; hand: number[] } }
-interface StandingRig { version: number; body: string; rest: number[][]; weights: number[][]; joints: ArmJoints; corrective?: number[][] }
+interface StandingRig { version: number; body: string; rest: number[][]; weights: number[][]; nativeWeights?: number[][]; smooth?: {factor:number;iterations:number;weights:number[]}; joints: ArmJoints; corrective?: number[][] }
 
 /** Seat_A 리깅본 (public/models/seat.bin — dev/armsplit.html 이 만듦) */
 interface SeatBone { name: string; parent: number; pos: number[]; follow?: { bone: number; frac: number } }
@@ -246,9 +246,18 @@ export class PuuvillaCharacter implements CharacterRig {
     }
     let standingRig: StandingRig | null = null;
     if (!sit && !armJoints && cfg.body.armRig === "connected") {
-      const r = await fetch(cfg.body.armRigPath);
+      const rigPath=/pu_v4\.obj(?:\?|$)/.test(path)?path.replace(/\.obj(\?.*)?$/,'.rig.json'):cfg.body.armRigPath;
+      const r = await fetch(rigPath);
       if (!r.ok) throw new Error(`Standing rig: HTTP ${r.status}`);
       standingRig = await r.json() as StandingRig;
+      if (standingRig.nativeWeights && (
+        standingRig.nativeWeights.length !== standingRig.rest.length ||
+        standingRig.nativeWeights.some(w=>w.length!==8 || w.some(v=>!Number.isFinite(v)||v<0) || Math.abs(w.reduce((a,b)=>a+b,0)-1)>.001) ||
+        !standingRig.smooth || !Number.isFinite(standingRig.smooth.factor) || standingRig.smooth.factor<0 || standingRig.smooth.factor>1 ||
+        !Number.isInteger(standingRig.smooth.iterations) || standingRig.smooth.iterations<0 || standingRig.smooth.iterations>100 ||
+        standingRig.smooth.weights.length!==standingRig.rest.length ||
+        standingRig.smooth.weights.some(v=>!Number.isFinite(v)||v<0||v>1)
+      )) throw new Error('Invalid native v4 skin data');
       const body = parts.find(p => p.name === standingRig!.body);
       if (standingRig.version !== 1 || !body || body.positions.length !== standingRig.rest.length ||
           standingRig.weights.length !== body.positions.length ||
@@ -586,7 +595,7 @@ export class PuuvillaCharacter implements CharacterRig {
       }
 
       if(geo.getAttribute('connectedArmWeights') && this.armSurface){
-        if(cfg.body.armDeform==='cage' && standingRig){
+        if(standingRig && (cfg.body.armDeform==='cage' || standingRig.nativeWeights)){
           const skin=new THREE.BufferGeometry();
           skin.setAttribute('position',new THREE.Float32BufferAttribute(part.positions.flat(),3));
           skin.setAttribute('connectedArmWeights',new THREE.Float32BufferAttribute(standingRig.weights.flat(),3));

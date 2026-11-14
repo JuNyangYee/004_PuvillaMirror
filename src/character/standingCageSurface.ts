@@ -5,9 +5,10 @@ import {RoundedElbowFrame} from './standingBend';
 import {StandingShoulderMetric} from './standingShoulderMetric';
 import {distributedPawTwist} from './standingPawTwist';
 import type {StandingArmSurface} from './standingArmSurface';
+import {NativeCorrectiveSmooth,type NativeSmoothSettings} from './nativeCorrectiveSmooth';
 
 const smooth=(a:number,b:number,x:number)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
-type CageRig={weights:number[][];corrective?:number[][];joints:{L:{shoulder:number[];hand:number[]};R:{shoulder:number[];hand:number[]}}};
+type CageRig={weights:number[][];nativeWeights?:number[][];smooth?:NativeSmoothSettings;corrective?:number[][];joints:{L:{shoulder:number[];hand:number[]};R:{shoulder:number[];hand:number[]}}};
 
 /** Skin the connected control cage, then evaluate its smooth surface. The
  * original mesh/UVs remain intact; only the arm support region is overridden. */
@@ -32,8 +33,10 @@ export class StandingCageSurface {
   evaluationCount=0;
   lastMilliseconds=0;
   private shoulderMetric:StandingShoulderMetric|null;
+  private nativeSmooth:NativeCorrectiveSmooth|null;
   constructor(private part:PolyMesh,levels:number,private rig:CageRig,private skin:THREE.BufferGeometry,geo:THREE.BufferGeometry,private surface:StandingArmSurface,private rounded=true,metric=false,private rollStart=.30,private distributedTwist=false,private bendSpread=.32){
-    this.shoulderMetric=metric?new StandingShoulderMetric(part.positions,part.faces,rig.weights):null;
+    this.shoulderMetric=metric&&!rig.nativeWeights?new StandingShoulderMetric(part.positions,part.faces,rig.weights):null;
+    this.nativeSmooth=rig.smooth?new NativeCorrectiveSmooth(part.positions,part.faces,rig.smooth):null;
     this.plans=subdivisionPlans(part,levels);
     this.points=new Float64Array(part.positions.length*3);
     const fine=subdivide(part,levels);
@@ -93,7 +96,7 @@ if(uCageReady>.5 && cagePosition.w>.5)transformed=cagePosition.xyz;`);
     this.previousState=state;this.evaluationCount++;
     const si=this.skin.getAttribute('skinIndex'),sw=this.skin.getAttribute('skinWeight');
     const p=new THREE.Vector3(),v=new THREE.Vector3(),sum=new THREE.Vector3(),local=new THREE.Vector3(),qr=new THREE.Quaternion(),qd=new THREE.Quaternion(),rot=new THREE.Quaternion(),trans=new THREE.Quaternion();
-    const bends=this.rounded && this.matrices.length>=8 ? this.axes.map((axis,side)=>{
+    const bends=!this.rig.nativeWeights && this.rounded && this.matrices.length>=8 ? this.axes.map((axis,side)=>{
       const bone=side===0?4:6,upper=axis.clone().transformDirection(this.matrices[bone]),fore=axis.clone().transformDirection(this.matrices[bone+1]);
       const hinge=upper.clone().cross(fore).normalize(),theta=upper.angleTo(fore),len=this.lengths[side];
       const frame=new RoundedElbowFrame(len,upper,fore,this.bendSpread),width=frame.width;
@@ -109,10 +112,12 @@ if(uCageReady>.5 && cagePosition.w>.5)transformed=cagePosition.xyz;`);
       if(bend>1e-6){v.copy(origin).addScaledVector(axis,len*.84);p.sub(v).applyQuaternion(rot.setFromAxisAngle(sum.copy(wrist).normalize(),bend*smooth(.81,.86,t)*mask)).add(v);}
       local.copy(p);
       const correction=this.rig.corrective?.[i]??[0,0,0];
-      if(mask>1e-7 || Math.hypot(...correction)>1e-7){
-        qr.set(0,0,0,0);qd.set(0,0,0,0);const reference=this.real[si.getX(i)];
-        for(let k=0;k<4;k++){
-          const bone=si.array[i*4+k],q=this.real[bone],d=this.dual[bone],weight=sw.array[i*4+k]*(q.dot(reference)<0?-1:1);
+      if(this.rig.nativeWeights || mask>1e-7 || Math.hypot(...correction)>1e-7){
+        const native=this.rig.nativeWeights?.[i];
+        qr.set(0,0,0,0);qd.set(0,0,0,0);
+        const reference=this.real[native?native.indexOf(Math.max(...native)):si.getX(i)];
+        for(let k=0;k<(native?native.length:4);k++){
+          const bone=native?k:si.array[i*4+k],q=this.real[bone],d=this.dual[bone],weight=(native?native[k]:sw.array[i*4+k])*(q.dot(reference)<0?-1:1);
           qr.set(qr.x+q.x*weight,qr.y+q.y*weight,qr.z+q.z*weight,qr.w+q.w*weight);
           qd.set(qd.x+d.x*weight,qd.y+d.y*weight,qd.z+d.z*weight,qd.w+d.w*weight);
         }
@@ -135,6 +140,7 @@ if(uCageReady>.5 && cagePosition.w>.5)transformed=cagePosition.xyz;`);
       p.add(v.fromArray(correction).applyQuaternion(this.surface.correctiveRotation.value[side]).multiplyScalar(this.surface.socketActivation.value.getComponent(side)));
       p.toArray(this.points,i*3);
     }
+    this.nativeSmooth?.apply(this.points);
     this.shoulderMetric?.apply(this.points);
     let fine=this.points;for(const plan of this.plans)fine=plan.evaluate(fine);
     const normals=this.normals;normals.fill(0);

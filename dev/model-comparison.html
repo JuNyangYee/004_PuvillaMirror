@@ -1,0 +1,67 @@
+<!doctype html><html><head><base href="/"><meta charset="utf-8"><title>Original / v4 pose comparison</title><style>body{background:#282c32;color:white;font:16px system-ui}canvas{max-width:100%}</style></head><body><p id="status">Loading actual runtime models…</p><script type="module">
+import * as THREE from 'three';
+import {loadConfig} from '/src/config.ts';
+import {PuuvillaCharacter} from '/src/character/puuvilla.ts';
+import {NEUTRAL_PARAMS} from '/src/character/mapping.ts';
+const base=await loadConfig();
+const models=[];
+for(const version of ['original','v4']){
+ const cfg=structuredClone(base);
+ cfg.character.modelPath=version==='original'?'/models/pu_stand.obj':'/models/pu_v4.obj';
+ cfg.outfit.muffler.fittedPath=version==='original'?'/models/muffler_fit.bin':'/models/pu_muffler_v4.bin';
+ cfg.character.idleBreathAmp=0;cfg.character.alwaysVisible=true;cfg.body.enabled=true;
+ cfg.outfit.seatBody=false;cfg.outfit.sitBody=false;cfg.outfit.style='christmas';
+ const ch=await PuuvillaCharacter.load(cfg);ch.setShellCount(0);
+ ch.setState({state:'MIMIC',elapsedMs:1000,progress:1});
+ models.push(ch);
+}
+for(let i=0;i<100 && models.some(c=>!c.xmasMeshes.length);i++)await new Promise(r=>setTimeout(r,100));
+if(models.some(c=>!c.xmasMeshes.length))throw Error('Scarf not loaded');
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setSize(640,640);renderer.setPixelRatio(1);renderer.setClearColor('#34383e');
+renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+const scene=new THREE.Scene();scene.add(new THREE.HemisphereLight(0xeef3ff,0x646168,2));
+for(const [x,y,z,p] of [[-8,12,12,3],[10,6,-8,2]]){const light=new THREE.DirectionalLight(0xffffff,p);light.position.set(x,y,z);scene.add(light);}
+models.forEach(c=>scene.add(c.root));
+const close=new URLSearchParams(location.search).get('crop')!=='full';
+const half=close?3.2:5.4;
+const camera=new THREE.OrthographicCamera(-half,half,half,-half,.1,100);
+const poses=[['01 Neutral',0,0,0],['02 Arms side',90,90,0],['03 Arms up',130,130,0],['04 Overhead',165,165,0],['05 One arm up',145,0,0],['06 Up + forward',120,120,55],['07 Arms forward',90,90,85]];
+const views=[['Front',0,0],['Side',90,0],['Back',180,0],['Above',0,55]];
+function pose(a,b,phi){
+ const limb=(side,deg)=>{const t=deg*Math.PI/180,p=phi*Math.PI/180,s=[side*.18,.48,0],d=[side*Math.sin(t)*Math.cos(p),-Math.cos(t),Math.sin(t)*Math.sin(p)],e=s.map((v,i)=>v+d[i]*.27),w=e.map((v,i)=>v+d[i]*.25);return {s,e,w,d};};
+ const l=limb(1,a),r=limb(-1,b);return {shoulderL:l.s,elbowL:l.e,wristL:l.w,shoulderR:r.s,elbowR:r.e,wristR:r.w,handDirectionL:l.d,handDirectionR:r.d,hipL:[.1,0,0],hipR:[-.1,0,0],armL:1,armR:1,hips:1};
+}
+function canvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.fillStyle='#20242a';g.fillRect(0,0,w,h);return c;}
+function label(c,t,x,y,size=22){const g=c.getContext('2d');g.fillStyle='#f3f5f8';g.font=`${size}px sans-serif`;g.fillText(t,x,y);}
+async function save(c,name){const r=await fetch('/__mimic/capture',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,data:c.toDataURL('image/png')})});if(!r.ok)throw Error(await r.text());}
+window.runComparison=async()=>{
+ const overview=canvas(2560,80+poses.length*360),sheets=[canvas(1920,80+poses.length*510),canvas(1920,80+poses.length*510)];
+ label(overview,'SAME POSE / SAME CAMERA / SAME LIGHT — Original vs v4 (runtime meshes)',20,36,28);
+ sheets.forEach((s,i)=>label(s,i?'V4 — actual runtime model':'ORIGINAL — actual runtime model',20,38,30));
+ const outputs=[];
+ for(let p=0;p<poses.length;p++){
+  const [name,a,b,phi]=poses[p];const input=pose(a,b,phi),page=canvas(2560,1420);
+  label(page,`${name} | upper-arm input: L ${a} / R ${b} deg; forward ${phi} deg`,20,36,28);
+  for(let m=0;m<2;m++){
+   const ch=models[m];ch.resetArmContact();for(let k=0;k<60;k++)ch.apply({...NEUTRAL_PARAMS},1/30,0,input,true);ch.prepareRender();
+   models.forEach((c,i)=>c.root.visible=i===m);
+   for(let v=0;v<views.length;v++){
+    const [title,yaw,tilt]=views[v],y=yaw*Math.PI/180,t=tilt*Math.PI/180;
+    const target=new THREE.Vector3(0,close?.5:-.75,0);camera.position.set(Math.sin(y)*Math.cos(t)*25,Math.sin(t)*25+target.y,Math.cos(y)*Math.cos(t)*25);camera.lookAt(target);camera.updateMatrixWorld();
+    renderer.render(scene,camera);
+    page.getContext('2d').drawImage(renderer.domElement,v*640,65+m*675);
+    label(page,`${m?'V4':'ORIGINAL'} / ${title}`,v*640+16,88+m*675);
+    overview.getContext('2d').drawImage(renderer.domElement,(v*2+m)*320,110+p*360,320,320);
+    label(overview,`${name} · ${title} · ${m?'V4':'OLD'}`,(v*2+m)*320+6,103+p*360,15);
+    sheets[m].getContext('2d').drawImage(renderer.domElement,v*480,105+p*510,480,480);
+    label(sheets[m],`${name} / ${title}`,v*480+10,99+p*510,20);
+   }
+  }
+  const file=`model-compare-${String(p+1).padStart(2,'0')}`;await save(page,file);outputs.push(file);document.querySelector('#status').textContent=`Rendered ${p+1}/${poses.length}`;
+ }
+ await save(overview,'model-compare-overview');await save(sheets[0],'model-compare-original');await save(sheets[1],'model-compare-v4');document.body.append(overview);
+ return {outputs,glError:renderer.getContext().getError(),poses,views};
+};
+document.querySelector('#status').textContent='Ready';window.comparisonReady=true;
+</script></body></html>
